@@ -377,8 +377,15 @@ struct BGClientWidgetEntryView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
 
-                    Spacer()
-                        .frame(height: 2)
+                    // Block number
+                    HStack(spacing: 4) {
+                        Image(systemName: "cube.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.cyan.opacity(0.8))
+                        Text(entry.blockNumber)
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
 
                     // Peers
                     HStack(spacing: 10) {
