@@ -7,6 +7,7 @@
 
 import SwiftUI
 import WidgetKit
+import Combine
 
 // MARK: - API Response Models
 
@@ -445,13 +446,23 @@ struct NodeDashboardView: View {
                     }
                 }
             }
-            .navigationTitle("BG Client Tracker")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { fetchNodes() }) {
                         Image(systemName: "arrow.clockwise")
                             .foregroundStyle(.cyan)
+                    }
+                }
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 8) {
+                        Image("BGLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+                        Text("BG Client Tracker")
+                            .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
