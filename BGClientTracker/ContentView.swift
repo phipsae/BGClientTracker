@@ -438,25 +438,24 @@ struct NodeDashboardView: View {
                                     // BGBRD Balance
                                     if let balance = bgbrdBalance {
                                         HStack(spacing: 12) {
-                                            // Total balance
+                                            // Total balance (bread token)
                                             HStack(spacing: 5) {
-                                                Image(systemName: "oven.fill")
-                                                    .font(.system(size: 11))
-                                                    .foregroundStyle(.orange)
+                                                Text("🍞")
+                                                    .font(.system(size: 12))
                                                 Text("\(balance)")
                                                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
                                                     .foregroundStyle(.orange)
                                             }
 
-                                            // Pending bread (baking)
+                                            // Pending bread (baking in oven)
                                             if let pending = pendingBread, let pendingValue = Double(pending), pendingValue > 0 {
                                                 HStack(spacing: 4) {
-                                                    Image(systemName: "flame.fill")
+                                                    Image(systemName: "oven.fill")
                                                         .font(.system(size: 10))
                                                         .foregroundStyle(.red)
-                                                        .opacity(isBakingAnimating ? 1.0 : 0.5)
-                                                        .scaleEffect(isBakingAnimating ? 1.1 : 0.9)
-                                                        .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: isBakingAnimating)
+                                                        .opacity(isBakingAnimating ? 1.0 : 0.6)
+                                                        .scaleEffect(isBakingAnimating ? 1.05 : 0.95)
+                                                        .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isBakingAnimating)
                                                     Text("+\(pending)")
                                                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                                                         .foregroundStyle(.red.opacity(0.9))
