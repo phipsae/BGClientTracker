@@ -36,6 +36,11 @@ struct BGBRDBalanceResponse: Codable {
     let balance: String
 }
 
+struct PendingBreadResponse: Codable {
+    let owner: String
+    let bread: String
+}
+
 // MARK: - API Service
 
 struct BGClientAPIService {
@@ -55,6 +60,15 @@ struct BGClientAPIService {
         }
         let (data, _) = try await URLSession.shared.data(from: url)
         return try JSONDecoder().decode(BGBRDBalanceResponse.self, from: data)
+    }
+
+    static func fetchPendingBread(owner: String) async throws -> PendingBreadResponse {
+        let encodedOwner = owner.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? owner
+        guard let url = URL(string: "https://pool.mainnet.rpc.buidlguidl.com:48546/yourpendingbread?owner=\(encodedOwner)") else {
+            throw URLError(.badURL)
+        }
+        let (data, _) = try await URLSession.shared.data(from: url)
+        return try JSONDecoder().decode(PendingBreadResponse.self, from: data)
     }
 }
 
@@ -350,6 +364,8 @@ struct NodeDashboardView: View {
     @State private var lastUpdated: Date = Date()
     @State private var showingSettings: Bool = false
     @State private var bgbrdBalance: String?
+    @State private var pendingBread: String?
+    @State private var isBakingAnimating: Bool = false
 
     private let refreshTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
@@ -421,13 +437,41 @@ struct NodeDashboardView: View {
 
                                     // BGBRD Balance
                                     if let balance = bgbrdBalance {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: "oven.fill")
-                                                .font(.system(size: 12))
-                                                .foregroundStyle(.orange)
-                                            Text("\(balance) BGBRD")
-                                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                                                .foregroundStyle(.orange)
+                                        HStack(spacing: 12) {
+                                            // Total balance
+                                            HStack(spacing: 5) {
+                                                Image(systemName: "oven.fill")
+                                                    .font(.system(size: 11))
+                                                    .foregroundStyle(.orange)
+                                                Text("\(balance)")
+                                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                                    .foregroundStyle(.orange)
+                                            }
+
+                                            // Pending bread (baking)
+                                            if let pending = pendingBread, let pendingValue = Double(pending), pendingValue > 0 {
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: "flame.fill")
+                                                        .font(.system(size: 10))
+                                                        .foregroundStyle(.red)
+                                                        .opacity(isBakingAnimating ? 1.0 : 0.5)
+                                                        .scaleEffect(isBakingAnimating ? 1.1 : 0.9)
+                                                        .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: isBakingAnimating)
+                                                    Text("+\(pending)")
+                                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                                        .foregroundStyle(.red.opacity(0.9))
+                                                }
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(
+                                                    Capsule()
+                                                        .fill(.red.opacity(0.15))
+                                                )
+                                            }
+
+                                            Text("BGBRD")
+                                                .font(.system(size: 10, weight: .medium, design: .rounded))
+                                                .foregroundStyle(.orange.opacity(0.7))
                                         }
                                         .padding(.top, 2)
                                     }
@@ -521,17 +565,27 @@ struct NodeDashboardView: View {
 
         Task {
             do {
+                // Fetch nodes and balance in parallel first
                 async let nodesResponse = BGClientAPIService.fetchNodes(owner: settings.ownerAddress)
                 async let balanceResponse = BGClientAPIService.fetchBGBRDBalance(owner: settings.ownerAddress)
 
                 let (nodeData, balanceData) = try await (nodesResponse, balanceResponse)
 
+                // Use the resolved ETH address from balance response for pending bread
+                let pendingData = try await BGClientAPIService.fetchPendingBread(owner: balanceData.address)
+
                 await MainActor.run {
                     nodes = nodeData.nodes
                     bgbrdBalance = balanceData.balance
+                    pendingBread = pendingData.bread
                     lastUpdated = Date()
                     isLoading = false
                     errorMessage = nil
+
+                    // Start baking animation if there's pending bread
+                    if let pending = Double(pendingData.bread), pending > 0 {
+                        isBakingAnimating = true
+                    }
                 }
             } catch {
                 await MainActor.run {
