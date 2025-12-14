@@ -31,6 +31,11 @@ struct BGNode: Codable, Identifiable {
     var id: String { nodeId }
 }
 
+struct BGBRDBalanceResponse: Codable {
+    let address: String
+    let balance: String
+}
+
 // MARK: - API Service
 
 struct BGClientAPIService {
@@ -41,6 +46,15 @@ struct BGClientAPIService {
         }
         let (data, _) = try await URLSession.shared.data(from: url)
         return try JSONDecoder().decode(BGClientResponse.self, from: data)
+    }
+
+    static func fetchBGBRDBalance(owner: String) async throws -> BGBRDBalanceResponse {
+        let encodedOwner = owner.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? owner
+        guard let url = URL(string: "https://bg-client-tracker-backend.vercel.app/balance?address=\(encodedOwner)") else {
+            throw URLError(.badURL)
+        }
+        let (data, _) = try await URLSession.shared.data(from: url)
+        return try JSONDecoder().decode(BGBRDBalanceResponse.self, from: data)
     }
 }
 
@@ -335,6 +349,7 @@ struct NodeDashboardView: View {
     @State private var errorMessage: String?
     @State private var lastUpdated: Date = Date()
     @State private var showingSettings: Bool = false
+    @State private var bgbrdBalance: String?
 
     private let refreshTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
@@ -403,6 +418,19 @@ struct NodeDashboardView: View {
                                         .font(.system(size: 14, weight: .medium, design: .monospaced))
                                         .foregroundStyle(.cyan)
                                         .lineLimit(1)
+
+                                    // BGBRD Balance
+                                    if let balance = bgbrdBalance {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "oven.fill")
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(.orange)
+                                            Text("\(balance) BGBRD")
+                                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                                .foregroundStyle(.orange)
+                                        }
+                                        .padding(.top, 2)
+                                    }
                                 }
 
                                 Spacer()
@@ -493,10 +521,14 @@ struct NodeDashboardView: View {
 
         Task {
             do {
-                let response = try await BGClientAPIService.fetchNodes(owner: settings.ownerAddress)
+                async let nodesResponse = BGClientAPIService.fetchNodes(owner: settings.ownerAddress)
+                async let balanceResponse = BGClientAPIService.fetchBGBRDBalance(owner: settings.ownerAddress)
+
+                let (nodeData, balanceData) = try await (nodesResponse, balanceResponse)
 
                 await MainActor.run {
-                    nodes = response.nodes
+                    nodes = nodeData.nodes
+                    bgbrdBalance = balanceData.balance
                     lastUpdated = Date()
                     isLoading = false
                     errorMessage = nil
