@@ -127,12 +127,17 @@ struct ContentView: View {
 
 struct SetupView: View {
     @EnvironmentObject var settings: SettingsManager
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @State private var inputAddress: String = ""
     @State private var isLoading: Bool = false
     @State private var errorMessage: String?
     @State private var logoScale: CGFloat = 0.8
     @State private var logoOpacity: Double = 0
     @State private var contentOpacity: Double = 0
+
+    private var isIPad: Bool {
+        horizontalSizeClass == .regular
+    }
 
     var body: some View {
         ZStack {
@@ -169,25 +174,25 @@ struct SetupView: View {
                     Image("BGLogo")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 180, height: 180)
+                        .frame(width: isIPad ? 240 : 180, height: isIPad ? 240 : 180)
                         .blur(radius: 40)
                         .opacity(0.5)
 
                     Image("BGLogo")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 180, height: 180)
+                        .frame(width: isIPad ? 240 : 180, height: isIPad ? 240 : 180)
                 }
                 .scaleEffect(logoScale)
                 .opacity(logoOpacity)
 
                 Spacer()
-                    .frame(height: 30)
+                    .frame(height: isIPad ? 50 : 30)
 
                 // Title
-                VStack(spacing: 6) {
+                VStack(spacing: isIPad ? 10 : 6) {
                     Text("BG Client Tracker")
-                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .font(.system(size: isIPad ? 40 : 28, weight: .bold, design: .monospaced))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [.white, Color(red: 0.6, green: 0.9, blue: 1.0)],
@@ -197,79 +202,79 @@ struct SetupView: View {
                         )
 
                     Text("Monitor your Ethereum node")
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .font(.system(size: isIPad ? 20 : 14, weight: .medium, design: .rounded))
                         .foregroundStyle(.white.opacity(0.5))
                 }
                 .opacity(contentOpacity)
 
                 Spacer()
-                    .frame(height: 40)
+                    .frame(height: isIPad ? 60 : 40)
 
                 // Input card
-                VStack(spacing: 20) {
-                    VStack(alignment: .leading, spacing: 8) {
+                VStack(spacing: isIPad ? 28 : 20) {
+                    VStack(alignment: .leading, spacing: isIPad ? 12 : 8) {
                         Text("Enter your address")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(.system(size: isIPad ? 17 : 13, weight: .semibold, design: .rounded))
                             .foregroundStyle(.white.opacity(0.7))
 
-                        HStack(spacing: 12) {
+                        HStack(spacing: isIPad ? 16 : 12) {
                             Image(systemName: "wallet.pass")
-                                .font(.system(size: 16))
+                                .font(.system(size: isIPad ? 20 : 16))
                                 .foregroundStyle(.cyan)
 
                             TextField("ENS name or ETH address", text: $inputAddress)
-                                .font(.system(size: 15, weight: .medium, design: .monospaced))
+                                .font(.system(size: isIPad ? 18 : 15, weight: .medium, design: .monospaced))
                                 .foregroundStyle(.white)
                                 .autocapitalization(.none)
                                 .disableAutocorrection(true)
                         }
-                        .padding(14)
+                        .padding(isIPad ? 18 : 14)
                         .background(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: isIPad ? 14 : 12)
                                 .fill(Color.white.opacity(0.05))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
+                                    RoundedRectangle(cornerRadius: isIPad ? 14 : 12)
                                         .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
                                 )
                         )
 
                         Text("e.g., phipsae.eth or 0x123...")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .font(.system(size: isIPad ? 14 : 11, weight: .medium, design: .rounded))
                             .foregroundStyle(.white.opacity(0.4))
                     }
 
                     if let error = errorMessage {
-                        HStack(spacing: 6) {
+                        HStack(spacing: isIPad ? 8 : 6) {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 12))
+                                .font(.system(size: isIPad ? 14 : 12))
                             Text(error)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: isIPad ? 14 : 12, weight: .medium))
                         }
                         .foregroundStyle(.orange)
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
+                        .padding(.vertical, isIPad ? 12 : 8)
+                        .padding(.horizontal, isIPad ? 16 : 12)
                         .background(
-                            RoundedRectangle(cornerRadius: 8)
+                            RoundedRectangle(cornerRadius: isIPad ? 10 : 8)
                                 .fill(.orange.opacity(0.15))
                         )
                     }
 
                     Button(action: validateAndContinue) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: isIPad ? 10 : 8) {
                             if isLoading {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .scaleEffect(0.8)
                             } else {
                                 Text("Connect")
-                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                    .font(.system(size: isIPad ? 20 : 16, weight: .semibold, design: .rounded))
                                 Image(systemName: "arrow.right")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(.system(size: isIPad ? 18 : 14, weight: .semibold))
                             }
                         }
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
+                        .padding(.vertical, isIPad ? 18 : 14)
                         .background(
                             LinearGradient(
                                 colors: [Color(red: 0.2, green: 0.6, blue: 0.8), Color(red: 0.3, green: 0.5, blue: 0.9)],
@@ -277,18 +282,18 @@ struct SetupView: View {
                                 endPoint: .trailing
                             )
                         )
-                        .cornerRadius(12)
+                        .cornerRadius(isIPad ? 14 : 12)
                         .shadow(color: .cyan.opacity(0.3), radius: 10, y: 4)
                     }
                     .disabled(inputAddress.isEmpty || isLoading)
                     .opacity(inputAddress.isEmpty ? 0.6 : 1.0)
                 }
-                .padding(24)
+                .padding(isIPad ? 32 : 24)
                 .background(
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: isIPad ? 24 : 20)
                         .fill(.ultraThinMaterial)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 20)
+                            RoundedRectangle(cornerRadius: isIPad ? 24 : 20)
                                 .stroke(
                                     LinearGradient(
                                         colors: [.white.opacity(0.15), .white.opacity(0.03)],
@@ -300,16 +305,17 @@ struct SetupView: View {
                         )
                 )
                 .opacity(contentOpacity)
-                .padding(.horizontal, 24)
+                .frame(maxWidth: isIPad ? 500 : .infinity)
+                .padding(.horizontal, isIPad ? 40 : 24)
 
                 Spacer()
 
                 // Footer
                 Text("Track your BuidlGuidl node status")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.system(size: isIPad ? 16 : 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.3))
                     .opacity(contentOpacity)
-                    .padding(.bottom, 30)
+                    .padding(.bottom, isIPad ? 50 : 30)
             }
         }
         .onAppear {
@@ -358,6 +364,7 @@ struct SetupView: View {
 
 struct NodeDashboardView: View {
     @EnvironmentObject var settings: SettingsManager
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @State private var nodes: [BGNode] = []
     @State private var isLoading: Bool = true
     @State private var errorMessage: String?
@@ -369,8 +376,25 @@ struct NodeDashboardView: View {
 
     private let refreshTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
+    // Adaptive grid columns based on device
+    private var gridColumns: [GridItem] {
+        if horizontalSizeClass == .regular {
+            // iPad - 2 or 3 columns depending on node count
+            return nodes.count > 2
+                ? [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
+                : [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
+        } else {
+            // iPhone - single column
+            return [GridItem(.flexible())]
+        }
+    }
+
+    private var isIPad: Bool {
+        horizontalSizeClass == .regular
+    }
+
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 // Background
                 LinearGradient(
@@ -403,117 +427,54 @@ struct NodeDashboardView: View {
                             .progressViewStyle(CircularProgressViewStyle(tint: .cyan))
                             .scaleEffect(1.2)
                         Text("Loading nodes...")
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .font(.system(size: isIPad ? 18 : 14, weight: .medium, design: .rounded))
                             .foregroundStyle(.white.opacity(0.6))
                     }
                 } else if let error = errorMessage, nodes.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 40))
+                            .font(.system(size: isIPad ? 60 : 40))
                             .foregroundStyle(.orange)
                         Text(error)
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .font(.system(size: isIPad ? 18 : 14, weight: .medium, design: .rounded))
                             .foregroundStyle(.white.opacity(0.7))
                             .multilineTextAlignment(.center)
                         Button("Retry") {
                             fetchNodes()
                         }
+                        .font(.system(size: isIPad ? 18 : 16))
                         .foregroundStyle(.cyan)
                     }
                     .padding()
                 } else {
                     ScrollView {
-                        VStack(spacing: 20) {
-                            // Header info
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Owner")
-                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(.white.opacity(0.5))
-                                    Text(settings.ownerAddress)
-                                        .font(.system(size: 14, weight: .medium, design: .monospaced))
-                                        .foregroundStyle(.cyan)
-                                        .lineLimit(1)
-
-                                    // BGBRD Balance
-                                    if let balance = bgbrdBalance {
-                                        HStack(spacing: 12) {
-                                            // Total balance (bread token)
-                                            HStack(spacing: 5) {
-                                                Text("🍞")
-                                                    .font(.system(size: 12))
-                                                Text("\(balance)")
-                                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                                    .foregroundStyle(.orange)
-                                            }
-
-                                            // Pending bread (baking in oven)
-                                            if let pending = pendingBread, let pendingValue = Double(pending), pendingValue > 0 {
-                                                HStack(spacing: 4) {
-                                                    Image(systemName: "oven.fill")
-                                                        .font(.system(size: 10))
-                                                        .foregroundStyle(.red)
-                                                        .opacity(isBakingAnimating ? 1.0 : 0.6)
-                                                        .scaleEffect(isBakingAnimating ? 1.05 : 0.95)
-                                                        .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isBakingAnimating)
-                                                    Text("+\(pending)")
-                                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                                        .foregroundStyle(.red.opacity(0.9))
-                                                }
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 2)
-                                                .background(
-                                                    Capsule()
-                                                        .fill(.red.opacity(0.15))
-                                                )
-                                            }
-
-                                            Text("BGBRD")
-                                                .font(.system(size: 10, weight: .medium, design: .rounded))
-                                                .foregroundStyle(.orange.opacity(0.7))
-                                        }
-                                        .padding(.top, 2)
-                                    }
-                                }
-
-                                Spacer()
-
-                                VStack(alignment: .trailing, spacing: 4) {
-                                    Text("Nodes Online")
-                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(.white.opacity(0.5))
-                                    Text("\(nodes.filter { $0.isFollowingHead }.count)/\(nodes.count)")
-                                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                                        .foregroundStyle(.green)
-                                }
+                        VStack(spacing: isIPad ? 28 : 20) {
+                            // Header info - adaptive layout for iPad
+                            if isIPad {
+                                iPadHeaderView
+                            } else {
+                                iPhoneHeaderView
                             }
-                            .padding(16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(.ultraThinMaterial)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                                    )
-                            )
 
-                            // Node cards
-                            ForEach(nodes) { node in
-                                NodeCardView(node: node, isSelected: node.nodeId == settings.selectedNodeId)
-                                    .onTapGesture {
-                                        withAnimation(.spring(response: 0.3)) {
-                                            settings.selectedNodeId = node.nodeId
+                            // Node cards in adaptive grid
+                            LazyVGrid(columns: gridColumns, spacing: isIPad ? 20 : 16) {
+                                ForEach(nodes) { node in
+                                    NodeCardView(node: node, isSelected: node.nodeId == settings.selectedNodeId, isIPad: isIPad)
+                                        .onTapGesture {
+                                            withAnimation(.spring(response: 0.3)) {
+                                                settings.selectedNodeId = node.nodeId
+                                            }
                                         }
-                                    }
+                                }
                             }
 
                             // Last updated
                             Text("Last updated: \(lastUpdated, style: .time)")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .font(.system(size: isIPad ? 14 : 11, weight: .medium, design: .rounded))
                                 .foregroundStyle(.white.opacity(0.4))
                                 .padding(.top, 8)
                         }
-                        .padding(20)
+                        .padding(isIPad ? 32 : 20)
                     }
                 }
             }
@@ -522,6 +483,7 @@ struct NodeDashboardView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { fetchNodes() }) {
                         Image(systemName: "arrow.clockwise")
+                            .font(.system(size: isIPad ? 18 : 16))
                             .foregroundStyle(.cyan)
                     }
                 }
@@ -530,21 +492,22 @@ struct NodeDashboardView: View {
                         Image("BGLogo")
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 24, height: 24)
+                            .frame(width: isIPad ? 32 : 24, height: isIPad ? 32 : 24)
                         Text("BG Client Tracker")
-                            .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            .font(.system(size: isIPad ? 22 : 17, weight: .semibold, design: .rounded))
                             .foregroundStyle(.white)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showingSettings = true }) {
                         Image(systemName: "gearshape")
+                            .font(.system(size: isIPad ? 18 : 16))
                             .foregroundStyle(.cyan)
                     }
                 }
             }
             .sheet(isPresented: $showingSettings) {
-                SettingsSheet()
+                SettingsSheet(isIPad: isIPad)
                     .environmentObject(settings)
             }
         }
@@ -555,6 +518,174 @@ struct NodeDashboardView: View {
         .onReceive(refreshTimer) { _ in
             fetchNodes()
         }
+    }
+
+    // MARK: - iPad Header View
+    private var iPadHeaderView: some View {
+        HStack(spacing: 24) {
+            // Owner info card
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Owner")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+                Text(settings.ownerAddress)
+                    .font(.system(size: 18, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.cyan)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+            )
+
+            // BGBRD Balance card
+            if let balance = bgbrdBalance {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("BGBRD Balance")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.5))
+
+                    HStack(spacing: 16) {
+                        HStack(spacing: 6) {
+                            Text("🍞")
+                                .font(.system(size: 18))
+                            Text("\(balance)")
+                                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.orange)
+                        }
+
+                        if let pending = pendingBread, let pendingValue = Double(pending), pendingValue > 0 {
+                            HStack(spacing: 6) {
+                                Image(systemName: "oven.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(.red)
+                                    .opacity(isBakingAnimating ? 1.0 : 0.6)
+                                    .scaleEffect(isBakingAnimating ? 1.05 : 0.95)
+                                    .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isBakingAnimating)
+                                Text("+\(pending)")
+                                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(.red.opacity(0.9))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(.red.opacity(0.15))
+                            )
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        )
+                )
+            }
+
+            // Nodes Online card
+            VStack(alignment: .center, spacing: 8) {
+                Text("Nodes Online")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+                Text("\(nodes.filter { $0.isFollowingHead }.count)/\(nodes.count)")
+                    .font(.system(size: 32, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.green)
+            }
+            .frame(minWidth: 150)
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.green.opacity(0.2), lineWidth: 1)
+                    )
+            )
+        }
+    }
+
+    // MARK: - iPhone Header View
+    private var iPhoneHeaderView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Owner")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+                Text(settings.ownerAddress)
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.cyan)
+                    .lineLimit(1)
+
+                // BGBRD Balance
+                if let balance = bgbrdBalance {
+                    HStack(spacing: 12) {
+                        HStack(spacing: 5) {
+                            Text("🍞")
+                                .font(.system(size: 12))
+                            Text("\(balance)")
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(.orange)
+                        }
+
+                        if let pending = pendingBread, let pendingValue = Double(pending), pendingValue > 0 {
+                            HStack(spacing: 4) {
+                                Image(systemName: "oven.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.red)
+                                    .opacity(isBakingAnimating ? 1.0 : 0.6)
+                                    .scaleEffect(isBakingAnimating ? 1.05 : 0.95)
+                                    .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isBakingAnimating)
+                                Text("+\(pending)")
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(.red.opacity(0.9))
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .fill(.red.opacity(0.15))
+                            )
+                        }
+
+                        Text("BGBRD")
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(.orange.opacity(0.7))
+                    }
+                    .padding(.top, 2)
+                }
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("Nodes Online")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+                Text("\(nodes.filter { $0.isFollowingHead }.count)/\(nodes.count)")
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.green)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+        )
     }
 
     private func fetchNodes() {
@@ -603,28 +734,29 @@ struct NodeDashboardView: View {
 struct NodeCardView: View {
     let node: BGNode
     let isSelected: Bool
+    var isIPad: Bool = false
 
     var statusColor: Color {
         node.isFollowingHead ? .green : .orange
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: isIPad ? 16 : 14) {
             // Header row
             HStack {
                 // Status indicator
                 HStack(spacing: 8) {
                     Circle()
                         .fill(statusColor)
-                        .frame(width: 10, height: 10)
+                        .frame(width: isIPad ? 12 : 10, height: isIPad ? 12 : 10)
                         .shadow(color: statusColor, radius: 4)
 
                     Text(node.isFollowingHead ? "Synced" : "Syncing")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.system(size: isIPad ? 14 : 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(statusColor)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .padding(.horizontal, isIPad ? 12 : 10)
+                .padding(.vertical, isIPad ? 6 : 5)
                 .background(
                     Capsule()
                         .fill(statusColor.opacity(0.15))
@@ -636,13 +768,13 @@ struct NodeCardView: View {
                 if isSelected {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 12))
+                            .font(.system(size: isIPad ? 14 : 12))
                         Text("Widget")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .font(.system(size: isIPad ? 13 : 11, weight: .semibold, design: .rounded))
                     }
                     .foregroundStyle(.cyan)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, isIPad ? 10 : 8)
+                    .padding(.vertical, isIPad ? 5 : 4)
                     .background(
                         Capsule()
                             .fill(.cyan.opacity(0.15))
@@ -652,16 +784,18 @@ struct NodeCardView: View {
 
             // Node ID
             Text(node.nodeId)
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .font(.system(size: isIPad ? 18 : 16, weight: .bold, design: .monospaced))
                 .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
 
             // Block number
             HStack(spacing: 6) {
                 Image(systemName: "cube.fill")
-                    .font(.system(size: 11))
+                    .font(.system(size: isIPad ? 13 : 11))
                     .foregroundStyle(.cyan.opacity(0.8))
                 Text("Block #\(formatNumber(node.blockNumber))")
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(.system(size: isIPad ? 15 : 13, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.8))
             }
 
@@ -669,23 +803,23 @@ struct NodeCardView: View {
                 .background(.white.opacity(0.1))
 
             // Clients info
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: isIPad ? 24 : 16) {
+                VStack(alignment: .leading, spacing: isIPad ? 4 : 2) {
                     Text("Execution")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .font(.system(size: isIPad ? 12 : 10, weight: .medium, design: .rounded))
                         .foregroundStyle(.white.opacity(0.5))
                     Text(node.executionClient)
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .font(.system(size: isIPad ? 13 : 11, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.8))
                         .lineLimit(1)
                 }
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: isIPad ? 4 : 2) {
                     Text("Consensus")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .font(.system(size: isIPad ? 12 : 10, weight: .medium, design: .rounded))
                         .foregroundStyle(.white.opacity(0.5))
                     Text(node.consensusClient)
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .font(.system(size: isIPad ? 13 : 11, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.8))
                         .lineLimit(1)
                 }
@@ -695,24 +829,24 @@ struct NodeCardView: View {
                 .background(.white.opacity(0.1))
 
             // Peers
-            HStack(spacing: 20) {
-                StatPill(icon: "network", label: "EL Peers", value: node.nExecutionPeers)
-                StatPill(icon: "antenna.radiowaves.left.and.right", label: "CL Peers", value: node.nConsensusPeers)
+            HStack(spacing: isIPad ? 24 : 20) {
+                StatPill(icon: "network", label: "EL Peers", value: node.nExecutionPeers, isIPad: isIPad)
+                StatPill(icon: "antenna.radiowaves.left.and.right", label: "CL Peers", value: node.nConsensusPeers, isIPad: isIPad)
             }
 
             // Resource usage
-            HStack(spacing: 12) {
-                ResourceBar(label: "CPU", value: Double(node.cpuUsage) ?? 0, color: .cyan)
-                ResourceBar(label: "MEM", value: Double(node.memoryUsage) ?? 0, color: .purple)
-                ResourceBar(label: "DISK", value: Double(node.storageUsage) ?? 0, color: .orange)
+            HStack(spacing: isIPad ? 16 : 12) {
+                ResourceBar(label: "CPU", value: Double(node.cpuUsage) ?? 0, color: .cyan, isIPad: isIPad)
+                ResourceBar(label: "MEM", value: Double(node.memoryUsage) ?? 0, color: .purple, isIPad: isIPad)
+                ResourceBar(label: "DISK", value: Double(node.storageUsage) ?? 0, color: .orange, isIPad: isIPad)
             }
         }
-        .padding(16)
+        .padding(isIPad ? 20 : 16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: isIPad ? 20 : 16)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: isIPad ? 20 : 16)
                         .stroke(isSelected ? Color.cyan.opacity(0.5) : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
                 )
         )
@@ -732,14 +866,15 @@ struct StatPill: View {
     let icon: String
     let label: String
     let value: String
+    var isIPad: Bool = false
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: isIPad ? 8 : 6) {
             Image(systemName: icon)
-                .font(.system(size: 10))
+                .font(.system(size: isIPad ? 12 : 10))
                 .foregroundStyle(.cyan.opacity(0.8))
             Text("\(label): \(value)")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(.system(size: isIPad ? 13 : 11, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.7))
         }
     }
@@ -751,30 +886,31 @@ struct ResourceBar: View {
     let label: String
     let value: Double
     let color: Color
+    var isIPad: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: isIPad ? 6 : 4) {
             HStack {
                 Text(label)
-                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .font(.system(size: isIPad ? 11 : 9, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.5))
                 Spacer()
                 Text(String(format: "%.0f%%", value))
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(.system(size: isIPad ? 11 : 9, weight: .bold, design: .monospaced))
                     .foregroundStyle(color)
             }
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
+                    RoundedRectangle(cornerRadius: isIPad ? 3 : 2)
                         .fill(.white.opacity(0.1))
 
-                    RoundedRectangle(cornerRadius: 2)
+                    RoundedRectangle(cornerRadius: isIPad ? 3 : 2)
                         .fill(color)
                         .frame(width: geo.size.width * min(value / 100, 1.0))
                 }
             }
-            .frame(height: 4)
+            .frame(height: isIPad ? 6 : 4)
         }
     }
 }
@@ -787,106 +923,112 @@ struct SettingsSheet: View {
     @State private var newAddress: String = ""
     @State private var isLoading: Bool = false
     @State private var errorMessage: String?
+    var isIPad: Bool = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Color(red: 0.05, green: 0.05, blue: 0.10)
                     .ignoresSafeArea()
 
-                VStack(spacing: 24) {
-                    // Current owner section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Current Owner")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
+                ScrollView {
+                    VStack(spacing: isIPad ? 32 : 24) {
+                        // Current owner section
+                        VStack(alignment: .leading, spacing: isIPad ? 12 : 8) {
+                            Text("Current Owner")
+                                .font(.system(size: isIPad ? 16 : 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.6))
 
-                        Text(settings.ownerAddress)
-                            .font(.system(size: 14, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.cyan)
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(.white.opacity(0.05))
-                            )
-                    }
-
-                    Divider()
-                        .background(.white.opacity(0.1))
-
-                    // Change owner section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Change Owner Address")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
-
-                        TextField("New ENS or ETH address", text: $newAddress)
-                            .font(.system(size: 14, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.white)
-                            .padding(12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(.white.opacity(0.05))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
-                                    )
-                            )
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-
-                        if let error = errorMessage {
-                            Text(error)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.orange)
+                            Text(settings.ownerAddress)
+                                .font(.system(size: isIPad ? 18 : 14, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.cyan)
+                                .padding(isIPad ? 16 : 12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(
+                                    RoundedRectangle(cornerRadius: isIPad ? 12 : 10)
+                                        .fill(.white.opacity(0.05))
+                                )
                         }
 
-                        Button(action: updateOwner) {
-                            HStack {
-                                if isLoading {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                        .scaleEffect(0.8)
-                                } else {
-                                    Text("Update")
-                                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                }
+                        Divider()
+                            .background(.white.opacity(0.1))
+
+                        // Change owner section
+                        VStack(alignment: .leading, spacing: isIPad ? 12 : 8) {
+                            Text("Change Owner Address")
+                                .font(.system(size: isIPad ? 16 : 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.6))
+
+                            TextField("New ENS or ETH address", text: $newAddress)
+                                .font(.system(size: isIPad ? 18 : 14, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.white)
+                                .padding(isIPad ? 16 : 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: isIPad ? 12 : 10)
+                                        .fill(.white.opacity(0.05))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: isIPad ? 12 : 10)
+                                                .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
+                                        )
+                                )
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+
+                            if let error = errorMessage {
+                                Text(error)
+                                    .font(.system(size: isIPad ? 14 : 12, weight: .medium))
+                                    .foregroundStyle(.orange)
                             }
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.cyan.opacity(0.8))
-                            )
+
+                            Button(action: updateOwner) {
+                                HStack {
+                                    if isLoading {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                            .scaleEffect(0.8)
+                                    } else {
+                                        Text("Update")
+                                            .font(.system(size: isIPad ? 17 : 14, weight: .semibold, design: .rounded))
+                                    }
+                                }
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, isIPad ? 16 : 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: isIPad ? 12 : 10)
+                                        .fill(Color.cyan.opacity(0.8))
+                                )
+                            }
+                            .disabled(newAddress.isEmpty || isLoading)
+                            .opacity(newAddress.isEmpty ? 0.5 : 1.0)
                         }
-                        .disabled(newAddress.isEmpty || isLoading)
-                        .opacity(newAddress.isEmpty ? 0.5 : 1.0)
-                    }
 
-                    Spacer()
+                        Spacer()
+                            .frame(height: isIPad ? 40 : 20)
 
-                    // Widget instructions
-                    VStack(spacing: 12) {
-                        Text("Widget Instructions")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
+                        // Widget instructions
+                        VStack(spacing: isIPad ? 16 : 12) {
+                            Text("Widget Instructions")
+                                .font(.system(size: isIPad ? 16 : 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.6))
 
-                        VStack(alignment: .leading, spacing: 8) {
-                            InstructionRow(step: "1", icon: "hand.tap", text: "Long press on Home Screen")
-                            InstructionRow(step: "2", icon: "plus.circle", text: "Tap + button")
-                            InstructionRow(step: "3", icon: "magnifyingglass", text: "Search \"BG Client\"")
-                            InstructionRow(step: "4", icon: "checkmark.circle.fill", text: "Add Widget")
+                            VStack(alignment: .leading, spacing: isIPad ? 12 : 8) {
+                                InstructionRow(step: "1", icon: "hand.tap", text: "Long press on Home Screen", isIPad: isIPad)
+                                InstructionRow(step: "2", icon: "plus.circle", text: "Tap + button", isIPad: isIPad)
+                                InstructionRow(step: "3", icon: "magnifyingglass", text: "Search \"BG Client\"", isIPad: isIPad)
+                                InstructionRow(step: "4", icon: "checkmark.circle.fill", text: "Add Widget", isIPad: isIPad)
+                            }
                         }
+                        .padding(isIPad ? 24 : 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: isIPad ? 16 : 12)
+                                .fill(.white.opacity(0.03))
+                        )
                     }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(.white.opacity(0.03))
-                    )
+                    .padding(isIPad ? 32 : 20)
+                    .frame(maxWidth: isIPad ? 600 : .infinity)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(20)
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -895,6 +1037,7 @@ struct SettingsSheet: View {
                     Button("Done") {
                         dismiss()
                     }
+                    .font(.system(size: isIPad ? 17 : 16))
                     .foregroundStyle(.cyan)
                 }
             }
@@ -940,9 +1083,10 @@ struct InstructionRow: View {
     let step: String
     let icon: String
     let text: String
+    var isIPad: Bool = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: isIPad ? 16 : 12) {
             ZStack {
                 Circle()
                     .fill(
@@ -952,20 +1096,20 @@ struct InstructionRow: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 28, height: 28)
+                    .frame(width: isIPad ? 36 : 28, height: isIPad ? 36 : 28)
 
                 Text(step)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(.system(size: isIPad ? 16 : 12, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
             }
 
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .font(.system(size: isIPad ? 18 : 14))
                 .foregroundStyle(.cyan.opacity(0.8))
-                .frame(width: 20)
+                .frame(width: isIPad ? 24 : 20)
 
             Text(text)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .font(.system(size: isIPad ? 16 : 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.8))
 
             Spacer()
