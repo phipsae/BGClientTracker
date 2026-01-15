@@ -67,7 +67,7 @@ struct WidgetSettings {
     static var selectedNodeId: String {
         defaults.string(forKey: "selectedNodeId") ?? ""
     }
-    
+
     // Store the last shown node ID so widget can show it even if app clears selection
     static var lastShownNodeId: String {
         get {
@@ -141,7 +141,7 @@ struct BGClientProvider: TimelineProvider {
         let currentDate = Date()
         let ownerAddress = WidgetSettings.ownerAddress
         let selectedNodeId = WidgetSettings.selectedNodeId
-        
+
         // Use selected node ID, or fall back to last shown node ID
         let nodeIdToShow = !selectedNodeId.isEmpty ? selectedNodeId : WidgetSettings.lastShownNodeId
 
@@ -168,7 +168,7 @@ struct BGClientProvider: TimelineProvider {
 
             // Check if the node we want to show is in the response
             let targetNode = response.nodes.first { $0.nodeId == nodeIdToShow }
-            
+
             // If target node is not found but we have a node ID, the node is offline
             if targetNode == nil && !nodeIdToShow.isEmpty {
                 // Node is offline - show offline state with the stored node ID
@@ -187,7 +187,7 @@ struct BGClientProvider: TimelineProvider {
                     needsSetup: false
                 )
             }
-            
+
             // If no target node and API returns empty (all nodes offline)
             if response.nodes.isEmpty {
                 // Use last shown node ID if available
@@ -207,7 +207,7 @@ struct BGClientProvider: TimelineProvider {
                     needsSetup: false
                 )
             }
-            
+
             // Use target node or fall back to first available node
             let node = targetNode ?? response.nodes.first
 
@@ -228,7 +228,7 @@ struct BGClientProvider: TimelineProvider {
                     needsSetup: false
                 )
             }
-            
+
             // Save the node ID we're showing so we can use it if node goes offline
             WidgetSettings.lastShownNodeId = node.nodeId
 
@@ -336,7 +336,7 @@ struct BGClientWidgetEntryView: View {
             return .orange
         }
     }
-    
+
     // Status text based on node state
     var statusText: String {
         if entry.isOffline {
@@ -347,7 +347,7 @@ struct BGClientWidgetEntryView: View {
             return "Syncing"
         }
     }
-    
+
     // MARK: - Small Widget
     var smallWidget: some View {
         ZStack {
@@ -480,7 +480,7 @@ struct BGClientWidgetEntryView: View {
                         Text("Node is down")
                             .font(.system(size: 10, weight: .medium, design: .rounded))
                             .foregroundStyle(.red.opacity(0.8))
-                        
+
                         Text("Check your node")
                             .font(.system(size: 9, weight: .regular, design: .rounded))
                             .foregroundStyle(.white.opacity(0.5))
@@ -536,7 +536,7 @@ struct BGClientWidgetEntryView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 24))
                             .foregroundStyle(.red.opacity(0.8))
-                        
+
                         Text("Restart\nRequired")
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
                             .foregroundStyle(.white.opacity(0.6))
@@ -686,7 +686,7 @@ struct BGClientTrackerWidget_Previews: PreviewProvider {
             )
             .previewContext(WidgetPreviewContext(family: .systemSmall))
             .previewDisplayName("Small - Syncing")
-            
+
             BGClientWidgetEntryView(
                 entry: BGClientEntry(
                     date: Date(),
@@ -724,7 +724,7 @@ struct BGClientTrackerWidget_Previews: PreviewProvider {
             )
             .previewContext(WidgetPreviewContext(family: .systemMedium))
             .previewDisplayName("Medium - Synced")
-            
+
             BGClientWidgetEntryView(
                 entry: BGClientEntry(
                     date: Date(),

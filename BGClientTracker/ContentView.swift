@@ -16,9 +16,9 @@ enum NotificationFrequency: Int, CaseIterable, Identifiable {
     case everyHour = 3600
     case everySixHours = 21600
     case oncePerDay = 86400
-    
+
     var id: Int { rawValue }
-    
+
     var displayName: String {
         switch self {
         case .everyHour: return "Every 1 hour"
@@ -26,7 +26,7 @@ enum NotificationFrequency: Int, CaseIterable, Identifiable {
         case .oncePerDay: return "Once per day"
         }
     }
-    
+
     var timeInterval: TimeInterval {
         TimeInterval(rawValue)
     }
@@ -36,11 +36,11 @@ enum NotificationFrequency: Int, CaseIterable, Identifiable {
 
 class NotificationManager: ObservableObject {
     static let shared = NotificationManager()
-    
+
     private let defaults = UserDefaults(suiteName: "group.com.buidlguidl.BGClientTracker") ?? UserDefaults.standard
-    
+
     @Published var isAuthorized: Bool = false
-    
+
     // Track all known node IDs (so we can detect when they disappear)
     private var knownNodeIds: Set<String> {
         get {
@@ -50,7 +50,7 @@ class NotificationManager: ObservableObject {
             defaults.set(Array(newValue), forKey: "knownNodeIds")
         }
     }
-    
+
     // Track which node IDs were not synced in the last check (online but not following head)
     private var previousNotSyncedNodeIds: Set<String> {
         get {
@@ -60,7 +60,7 @@ class NotificationManager: ObservableObject {
             defaults.set(Array(newValue), forKey: "previousNotSyncedNodeIds")
         }
     }
-    
+
     // Track which node IDs were completely offline in the last check (disappeared from API)
     private var previousOfflineNodeIds: Set<String> {
         get {
@@ -70,20 +70,20 @@ class NotificationManager: ObservableObject {
             defaults.set(Array(newValue), forKey: "previousOfflineNodeIds")
         }
     }
-    
+
     // Track last notification time per node for cooldown reminders
     private func lastNotificationTime(for nodeId: String) -> Date? {
         defaults.object(forKey: "lastNotificationTime_\(nodeId)") as? Date
     }
-    
+
     private func setLastNotificationTime(_ date: Date, for nodeId: String) {
         defaults.set(date, forKey: "lastNotificationTime_\(nodeId)")
     }
-    
+
     init() {
         checkAuthorizationStatus()
     }
-    
+
     func checkAuthorizationStatus() {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             DispatchQueue.main.async {
@@ -91,7 +91,7 @@ class NotificationManager: ObservableObject {
             }
         }
     }
-    
+
     func requestPermission() async -> Bool {
         do {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
@@ -103,40 +103,40 @@ class NotificationManager: ObservableObject {
             return false
         }
     }
-    
+
     func checkNodesAndNotify(nodes: [BGNode], settings: SettingsManager) {
         guard settings.notificationsEnabled else { return }
         guard isAuthorized else { return }
-        
+
         let currentNodeIds = Set(nodes.map { $0.nodeId })
-        
+
         // Separate: nodes that are not synced (online but not following head)
         let currentNotSyncedIds = Set(nodes.filter { !$0.isFollowingHead }.map { $0.nodeId })
-        
+
         // Separate: nodes that completely disappeared from API
         let currentOfflineIds = knownNodeIds.subtracting(currentNodeIds)
-        
+
         // Find newly not synced nodes (was synced before, now not synced)
         let newlyNotSyncedIds = currentNotSyncedIds.subtracting(previousNotSyncedNodeIds).subtracting(previousOfflineNodeIds)
-        
+
         // Find newly offline nodes (was online before, now completely gone)
         let newlyOfflineIds = currentOfflineIds.subtracting(previousOfflineNodeIds)
-        
+
         // Send notifications for newly not synced nodes
         for nodeId in newlyNotSyncedIds {
             sendNodeNotSyncedNotification(nodeName: nodeId)
             setLastNotificationTime(Date(), for: nodeId)
         }
-        
+
         // Send notifications for newly offline nodes (more severe)
         for nodeId in newlyOfflineIds {
             sendNodeOfflineNotification(nodeName: nodeId)
             setLastNotificationTime(Date(), for: nodeId)
         }
-        
+
         // Check for cooldown reminders
         let frequency = NotificationFrequency(rawValue: settings.notificationFrequency) ?? .everyHour
-        
+
         // Reminders for nodes still not synced
         let stillNotSyncedIds = currentNotSyncedIds.intersection(previousNotSyncedNodeIds)
         for nodeId in stillNotSyncedIds {
@@ -146,7 +146,7 @@ class NotificationManager: ObservableObject {
                 setLastNotificationTime(Date(), for: nodeId)
             }
         }
-        
+
         // Reminders for nodes still offline
         let stillOfflineIds = currentOfflineIds.intersection(previousOfflineNodeIds)
         for nodeId in stillOfflineIds {
@@ -156,113 +156,113 @@ class NotificationManager: ObservableObject {
                 setLastNotificationTime(Date(), for: nodeId)
             }
         }
-        
+
         // Update tracking - add current nodes to known nodes
         knownNodeIds = knownNodeIds.union(currentNodeIds)
         previousNotSyncedNodeIds = currentNotSyncedIds
         previousOfflineNodeIds = currentOfflineIds
     }
-    
+
     // MARK: - Not Synced Notifications (node online but not following head)
-    
+
     private func sendNodeNotSyncedNotification(nodeName: String) {
         let content = UNMutableNotificationContent()
         content.title = "Node Out of Sync"
         content.body = "\(nodeName) is not following the chain head"
         content.sound = .default
         content.badge = 1
-        
+
         let request = UNNotificationRequest(
             identifier: "node-not-synced-\(UUID().uuidString)",
             content: content,
             trigger: nil
         )
-        
+
         UNUserNotificationCenter.current().add(request)
     }
-    
+
     private func sendNodeStillNotSyncedNotification(nodeName: String) {
         let content = UNMutableNotificationContent()
         content.title = "Node Still Out of Sync"
         content.body = "\(nodeName) is still not following the chain head"
         content.sound = .default
         content.badge = 1
-        
+
         let request = UNNotificationRequest(
             identifier: "node-still-not-synced-\(UUID().uuidString)",
             content: content,
             trigger: nil
         )
-        
+
         UNUserNotificationCenter.current().add(request)
     }
-    
+
     // MARK: - Offline Notifications (node completely disappeared)
-    
+
     private func sendNodeOfflineNotification(nodeName: String) {
         let content = UNMutableNotificationContent()
         content.title = "Node Offline"
         content.body = "\(nodeName) is completely down! Restart required."
         content.sound = .default
         content.badge = 1
-        
+
         let request = UNNotificationRequest(
             identifier: "node-offline-\(UUID().uuidString)",
             content: content,
             trigger: nil
         )
-        
+
         UNUserNotificationCenter.current().add(request)
     }
-    
+
     private func sendNodeStillOfflineNotification(nodeName: String) {
         let content = UNMutableNotificationContent()
         content.title = "Node Still Offline"
         content.body = "\(nodeName) is still down! Please restart."
         content.sound = .default
         content.badge = 1
-        
+
         let request = UNNotificationRequest(
             identifier: "node-still-offline-\(UUID().uuidString)",
             content: content,
             trigger: nil
         )
-        
+
         UNUserNotificationCenter.current().add(request)
     }
-    
+
     func sendTestNotification() {
         let content = UNMutableNotificationContent()
         content.title = "Test Notification"
         content.body = "Node notifications are working correctly!"
         content.sound = .default
-        
+
         let request = UNNotificationRequest(
             identifier: "test-\(UUID().uuidString)",
             content: content,
             trigger: nil
         )
-        
+
         UNUserNotificationCenter.current().add(request)
     }
-    
+
     func clearBadge() {
         UNUserNotificationCenter.current().setBadgeCount(0)
     }
-    
+
     /// Resets all node tracking data - should be called when owner address changes
     func resetTracking() {
         knownNodeIds = []
         previousNotSyncedNodeIds = []
         previousOfflineNodeIds = []
-        
+
         // Clear all lastNotificationTime entries
         let allKeys = defaults.dictionaryRepresentation().keys
         for key in allKeys where key.hasPrefix("lastNotificationTime_") {
             defaults.removeObject(forKey: key)
         }
     }
-    
+
     /// Remove a specific node from tracking - should be called when user deletes an offline node
     func removeNodeFromTracking(_ nodeId: String) {
         knownNodeIds.remove(nodeId)
@@ -311,9 +311,9 @@ struct StoredNode: Codable, Identifiable {
     let executionClient: String
     let consensusClient: String
     let lastSeen: Date
-    
+
     var id: String { nodeId }
-    
+
     /// Create a StoredNode from a BGNode (when node is online)
     init(from node: BGNode) {
         self.nodeId = node.nodeId
@@ -321,7 +321,7 @@ struct StoredNode: Codable, Identifiable {
         self.consensusClient = node.consensusClient
         self.lastSeen = Date()
     }
-    
+
     init(nodeId: String, executionClient: String, consensusClient: String, lastSeen: Date) {
         self.nodeId = nodeId
         self.executionClient = executionClient
@@ -392,13 +392,13 @@ class SettingsManager: ObservableObject {
             defaults.set(hasCompletedSetup, forKey: "hasCompletedSetup")
         }
     }
-    
+
     @Published var notificationsEnabled: Bool {
         didSet {
             defaults.set(notificationsEnabled, forKey: "notificationsEnabled")
         }
     }
-    
+
     @Published var notificationFrequency: Int {
         didSet {
             defaults.set(notificationFrequency, forKey: "notificationFrequency")
@@ -413,9 +413,9 @@ class SettingsManager: ObservableObject {
         // Default to every hour
         self.notificationFrequency = defaults.object(forKey: "notificationFrequency") as? Int ?? NotificationFrequency.everyHour.rawValue
     }
-    
+
     // MARK: - Node Persistence for Offline Tracking
-    
+
     /// Dictionary of stored nodes keyed by nodeId
     private var storedNodesData: [String: StoredNode] {
         get {
@@ -431,14 +431,14 @@ class SettingsManager: ObservableObject {
             }
         }
     }
-    
+
     /// Save or update a node when it's seen online
     func saveNode(_ node: BGNode) {
         var nodes = storedNodesData
         nodes[node.nodeId] = StoredNode(from: node)
         storedNodesData = nodes
     }
-    
+
     /// Save multiple nodes at once
     func saveNodes(_ bgNodes: [BGNode]) {
         var nodes = storedNodesData
@@ -447,14 +447,14 @@ class SettingsManager: ObservableObject {
         }
         storedNodesData = nodes
     }
-    
+
     /// Remove a node permanently (when user deletes an offline node)
     func removeNode(_ nodeId: String) {
         var nodes = storedNodesData
         nodes.removeValue(forKey: nodeId)
         storedNodesData = nodes
     }
-    
+
     /// Get all nodes that are currently offline (stored but not in the online list)
     func getOfflineNodes(excluding onlineNodeIds: Set<String>) -> [StoredNode] {
         let stored = storedNodesData
@@ -462,7 +462,7 @@ class SettingsManager: ObservableObject {
             .filter { !onlineNodeIds.contains($0.nodeId) }
             .sorted { $0.lastSeen > $1.lastSeen } // Most recently seen first
     }
-    
+
     /// Clear all stored nodes - should be called when owner address changes
     func clearStoredNodes() {
         storedNodesData = [:]
@@ -832,7 +832,7 @@ struct NodeDashboardView: View {
                                         }
                                 }
                             }
-                            
+
                             // Offline Nodes Section
                             if !offlineNodes.isEmpty {
                                 VStack(alignment: .leading, spacing: isIPad ? 16 : 12) {
@@ -844,13 +844,13 @@ struct NodeDashboardView: View {
                                         Text("Offline Nodes")
                                             .font(.system(size: isIPad ? 18 : 15, weight: .semibold, design: .rounded))
                                             .foregroundStyle(.white.opacity(0.8))
-                                        
+
                                         Text("(\(offlineNodes.count))")
                                             .font(.system(size: isIPad ? 16 : 13, weight: .medium, design: .monospaced))
                                             .foregroundStyle(.red.opacity(0.8))
                                     }
                                     .padding(.top, isIPad ? 16 : 12)
-                                    
+
                                     // Offline node cards
                                     LazyVGrid(columns: gridColumns, spacing: isIPad ? 20 : 16) {
                                         ForEach(offlineNodes) { node in
@@ -1122,14 +1122,14 @@ struct NodeDashboardView: View {
                     if let pending = Double(pendingData.bread), pending > 0 {
                         isBakingAnimating = true
                     }
-                    
+
                     // Save all online nodes to persistent storage
                     settings.saveNodes(nodeData.nodes)
-                    
+
                     // Calculate offline nodes (stored but not in current API response)
                     let onlineNodeIds = Set(nodeData.nodes.map { $0.nodeId })
                     offlineNodes = settings.getOfflineNodes(excluding: onlineNodeIds)
-                    
+
                     // Check nodes and send notification if needed
                     notificationManager.checkNodesAndNotify(
                         nodes: nodeData.nodes,
@@ -1146,14 +1146,14 @@ struct NodeDashboardView: View {
             }
         }
     }
-    
+
     private func deleteOfflineNode(_ nodeId: String) {
         withAnimation(.spring(response: 0.3)) {
             settings.removeNode(nodeId)
             offlineNodes.removeAll { $0.nodeId == nodeId }
             // Also remove from notification tracking
             notificationManager.removeNodeFromTracking(nodeId)
-            
+
             // If the deleted node was selected for the widget, select another node
             if settings.selectedNodeId == nodeId {
                 // Try to select first online node, otherwise clear selection
@@ -1300,7 +1300,7 @@ struct OfflineNodeCardView: View {
     let node: StoredNode
     let onDelete: () -> Void
     var isIPad: Bool = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: isIPad ? 14 : 12) {
             // Header row
@@ -1311,7 +1311,7 @@ struct OfflineNodeCardView: View {
                         .fill(Color.red)
                         .frame(width: isIPad ? 12 : 10, height: isIPad ? 12 : 10)
                         .shadow(color: .red.opacity(0.5), radius: 4)
-                    
+
                     Text("Offline")
                         .font(.system(size: isIPad ? 14 : 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(.red)
@@ -1322,9 +1322,9 @@ struct OfflineNodeCardView: View {
                     Capsule()
                         .fill(.red.opacity(0.15))
                 )
-                
+
                 Spacer()
-                
+
                 // Delete button
                 Button(action: onDelete) {
                     HStack(spacing: 4) {
@@ -1347,17 +1347,17 @@ struct OfflineNodeCardView: View {
                 }
                 .buttonStyle(.plain)
             }
-            
+
             // Node ID
             Text(node.nodeId)
                 .font(.system(size: isIPad ? 18 : 16, weight: .bold, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.6))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-            
+
             Divider()
                 .background(.white.opacity(0.1))
-            
+
             // Clients info (grayed out)
             HStack(spacing: isIPad ? 24 : 16) {
                 VStack(alignment: .leading, spacing: isIPad ? 4 : 2) {
@@ -1369,7 +1369,7 @@ struct OfflineNodeCardView: View {
                         .foregroundStyle(.white.opacity(0.5))
                         .lineLimit(1)
                 }
-                
+
                 VStack(alignment: .leading, spacing: isIPad ? 4 : 2) {
                     Text("Consensus")
                         .font(.system(size: isIPad ? 12 : 10, weight: .medium, design: .rounded))
@@ -1380,7 +1380,7 @@ struct OfflineNodeCardView: View {
                         .lineLimit(1)
                 }
             }
-            
+
             // Last seen timestamp
             HStack(spacing: 6) {
                 Image(systemName: "clock")
@@ -1470,7 +1470,7 @@ struct SettingsSheet: View {
     @State private var errorMessage: String?
     @State private var showingTestNotificationSent: Bool = false
     var isIPad: Bool = false
-    
+
     private var selectedFrequency: Binding<NotificationFrequency> {
         Binding(
             get: { NotificationFrequency(rawValue: settings.notificationFrequency) ?? .everyHour },
@@ -1558,13 +1558,13 @@ struct SettingsSheet: View {
 
                         Divider()
                             .background(.white.opacity(0.1))
-                        
+
                         // Notification settings section
                         VStack(alignment: .leading, spacing: isIPad ? 16 : 12) {
                             Text("Notifications")
                                 .font(.system(size: isIPad ? 16 : 13, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.white.opacity(0.6))
-                            
+
                             // Enable/disable toggle
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -1592,14 +1592,14 @@ struct SettingsSheet: View {
                                 RoundedRectangle(cornerRadius: isIPad ? 12 : 10)
                                     .fill(.white.opacity(0.05))
                             )
-                            
+
                             // Frequency picker (only show when enabled)
                             if settings.notificationsEnabled {
                                 VStack(alignment: .leading, spacing: isIPad ? 10 : 8) {
                                     Text("Notification Frequency")
                                         .font(.system(size: isIPad ? 14 : 12, weight: .medium, design: .rounded))
                                         .foregroundStyle(.white.opacity(0.7))
-                                    
+
                                     Picker("Frequency", selection: selectedFrequency) {
                                         ForEach(NotificationFrequency.allCases) { frequency in
                                             Text(frequency.displayName)
@@ -1614,7 +1614,7 @@ struct SettingsSheet: View {
                                     RoundedRectangle(cornerRadius: isIPad ? 12 : 10)
                                         .fill(.white.opacity(0.05))
                                 )
-                                
+
                                 // Test notification button
                                 Button(action: {
                                     notificationManager.sendTestNotification()
@@ -1643,7 +1643,7 @@ struct SettingsSheet: View {
                                 }
                                 .disabled(!notificationManager.isAuthorized)
                                 .opacity(notificationManager.isAuthorized ? 1.0 : 0.5)
-                                
+
                                 if !notificationManager.isAuthorized {
                                     HStack(spacing: 6) {
                                         Image(systemName: "exclamationmark.triangle.fill")
