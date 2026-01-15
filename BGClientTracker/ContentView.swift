@@ -8,6 +8,181 @@
 import SwiftUI
 import WidgetKit
 import Combine
+import UserNotifications
+
+// MARK: - Notification Frequency Enum
+
+enum NotificationFrequency: Int, CaseIterable, Identifiable {
+    case everyHour = 3600
+    case everySixHours = 21600
+    case oncePerDay = 86400
+    
+    var id: Int { rawValue }
+    
+    var displayName: String {
+        switch self {
+        case .everyHour: return "Every 1 hour"
+        case .everySixHours: return "Every 6 hours"
+        case .oncePerDay: return "Once per day"
+        }
+    }
+    
+    var timeInterval: TimeInterval {
+        TimeInterval(rawValue)
+    }
+}
+
+// MARK: - Notification Manager
+
+class NotificationManager: ObservableObject {
+    static let shared = NotificationManager()
+    
+    private let defaults = UserDefaults(suiteName: "group.com.buidlguidl.BGClientTracker") ?? UserDefaults.standard
+    
+    @Published var isAuthorized: Bool = false
+    
+    // Track all known node IDs (so we can detect when they disappear)
+    private var knownNodeIds: Set<String> {
+        get {
+            Set(defaults.stringArray(forKey: "knownNodeIds") ?? [])
+        }
+        set {
+            defaults.set(Array(newValue), forKey: "knownNodeIds")
+        }
+    }
+    
+    // Track which node IDs were offline in the last check
+    private var previousOfflineNodeIds: Set<String> {
+        get {
+            Set(defaults.stringArray(forKey: "previousOfflineNodeIds") ?? [])
+        }
+        set {
+            defaults.set(Array(newValue), forKey: "previousOfflineNodeIds")
+        }
+    }
+    
+    // Track last notification time per node for cooldown reminders
+    private func lastNotificationTime(for nodeId: String) -> Date? {
+        defaults.object(forKey: "lastNotificationTime_\(nodeId)") as? Date
+    }
+    
+    private func setLastNotificationTime(_ date: Date, for nodeId: String) {
+        defaults.set(date, forKey: "lastNotificationTime_\(nodeId)")
+    }
+    
+    init() {
+        checkAuthorizationStatus()
+    }
+    
+    func checkAuthorizationStatus() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                self.isAuthorized = settings.authorizationStatus == .authorized
+            }
+        }
+    }
+    
+    func requestPermission() async -> Bool {
+        do {
+            let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+            await MainActor.run {
+                self.isAuthorized = granted
+            }
+            return granted
+        } catch {
+            print("Notification permission error: \(error)")
+            return false
+        }
+    }
+    
+    func checkNodesAndNotify(nodes: [BGNode], settings: SettingsManager) {
+        guard settings.notificationsEnabled else { return }
+        guard isAuthorized else { return }
+        
+        let currentNodeIds = Set(nodes.map { $0.nodeId })
+        
+        // Get nodes that are offline (either not following head, or completely disappeared)
+        let notFollowingHeadIds = Set(nodes.filter { !$0.isFollowingHead }.map { $0.nodeId })
+        let disappearedNodeIds = knownNodeIds.subtracting(currentNodeIds)
+        let currentOfflineIds = notFollowingHeadIds.union(disappearedNodeIds)
+        
+        // Find newly offline nodes (including disappeared ones)
+        let newlyOfflineIds = currentOfflineIds.subtracting(previousOfflineNodeIds)
+        
+        // Send notification for each newly offline node
+        for nodeId in newlyOfflineIds {
+            sendNodeOfflineNotification(nodeName: nodeId)
+            setLastNotificationTime(Date(), for: nodeId)
+        }
+        
+        // Check for cooldown reminders on nodes still offline
+        let frequency = NotificationFrequency(rawValue: settings.notificationFrequency) ?? .everyHour
+        let stillOfflineIds = currentOfflineIds.intersection(previousOfflineNodeIds)
+        
+        for nodeId in stillOfflineIds {
+            if let lastTime = lastNotificationTime(for: nodeId),
+               Date().timeIntervalSince(lastTime) >= frequency.timeInterval {
+                sendNodeStillOfflineNotification(nodeName: nodeId)
+                setLastNotificationTime(Date(), for: nodeId)
+            }
+        }
+        
+        // Update tracking - add current nodes to known nodes
+        knownNodeIds = knownNodeIds.union(currentNodeIds)
+        previousOfflineNodeIds = currentOfflineIds
+    }
+    
+    private func sendNodeOfflineNotification(nodeName: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Node Offline"
+        content.body = "\(nodeName) is down!"
+        content.sound = .default
+        content.badge = 1
+        
+        let request = UNNotificationRequest(
+            identifier: "node-offline-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        
+        UNUserNotificationCenter.current().add(request)
+    }
+    
+    private func sendNodeStillOfflineNotification(nodeName: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Node Still Offline"
+        content.body = "\(nodeName) is still down!"
+        content.sound = .default
+        content.badge = 1
+        
+        let request = UNNotificationRequest(
+            identifier: "node-still-offline-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        
+        UNUserNotificationCenter.current().add(request)
+    }
+    
+    func sendTestNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "Test Notification"
+        content.body = "Node notifications are working correctly!"
+        content.sound = .default
+        
+        let request = UNNotificationRequest(
+            identifier: "test-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        
+        UNUserNotificationCenter.current().add(request)
+    }
+    
+    func clearBadge() {
+        UNUserNotificationCenter.current().setBadgeCount(0)
+    }
+}
 
 // MARK: - API Response Models
 
@@ -99,11 +274,26 @@ class SettingsManager: ObservableObject {
             defaults.set(hasCompletedSetup, forKey: "hasCompletedSetup")
         }
     }
+    
+    @Published var notificationsEnabled: Bool {
+        didSet {
+            defaults.set(notificationsEnabled, forKey: "notificationsEnabled")
+        }
+    }
+    
+    @Published var notificationFrequency: Int {
+        didSet {
+            defaults.set(notificationFrequency, forKey: "notificationFrequency")
+        }
+    }
 
     init() {
         self.ownerAddress = defaults.string(forKey: "ownerAddress") ?? ""
         self.selectedNodeId = defaults.string(forKey: "selectedNodeId") ?? ""
         self.hasCompletedSetup = defaults.bool(forKey: "hasCompletedSetup")
+        self.notificationsEnabled = defaults.bool(forKey: "notificationsEnabled")
+        // Default to every hour
+        self.notificationFrequency = defaults.object(forKey: "notificationFrequency") as? Int ?? NotificationFrequency.everyHour.rawValue
     }
 }
 
@@ -364,7 +554,9 @@ struct SetupView: View {
 
 struct NodeDashboardView: View {
     @EnvironmentObject var settings: SettingsManager
+    @StateObject private var notificationManager = NotificationManager.shared
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.scenePhase) var scenePhase
     @State private var nodes: [BGNode] = []
     @State private var isLoading: Bool = true
     @State private var errorMessage: String?
@@ -517,6 +709,12 @@ struct NodeDashboardView: View {
         }
         .onReceive(refreshTimer) { _ in
             fetchNodes()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                notificationManager.clearBadge()
+                notificationManager.checkAuthorizationStatus()
+            }
         }
     }
 
@@ -716,6 +914,12 @@ struct NodeDashboardView: View {
                     if let pending = Double(pendingData.bread), pending > 0 {
                         isBakingAnimating = true
                     }
+                    
+                    // Check nodes and send notification if needed
+                    notificationManager.checkNodesAndNotify(
+                        nodes: nodeData.nodes,
+                        settings: settings
+                    )
                 }
             } catch {
                 await MainActor.run {
@@ -919,11 +1123,20 @@ struct ResourceBar: View {
 
 struct SettingsSheet: View {
     @EnvironmentObject var settings: SettingsManager
+    @StateObject private var notificationManager = NotificationManager.shared
     @Environment(\.dismiss) var dismiss
     @State private var newAddress: String = ""
     @State private var isLoading: Bool = false
     @State private var errorMessage: String?
+    @State private var showingTestNotificationSent: Bool = false
     var isIPad: Bool = false
+    
+    private var selectedFrequency: Binding<NotificationFrequency> {
+        Binding(
+            get: { NotificationFrequency(rawValue: settings.notificationFrequency) ?? .everyHour },
+            set: { settings.notificationFrequency = $0.rawValue }
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -1003,8 +1216,108 @@ struct SettingsSheet: View {
                             .opacity(newAddress.isEmpty ? 0.5 : 1.0)
                         }
 
+                        Divider()
+                            .background(.white.opacity(0.1))
+                        
+                        // Notification settings section
+                        VStack(alignment: .leading, spacing: isIPad ? 16 : 12) {
+                            Text("Notifications")
+                                .font(.system(size: isIPad ? 16 : 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.6))
+                            
+                            // Enable/disable toggle
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Node Alerts")
+                                        .font(.system(size: isIPad ? 16 : 14, weight: .medium, design: .rounded))
+                                        .foregroundStyle(.white)
+                                    Text("Get notified when a node goes offline")
+                                        .font(.system(size: isIPad ? 13 : 11, weight: .regular, design: .rounded))
+                                        .foregroundStyle(.white.opacity(0.5))
+                                }
+                                Spacer()
+                                Toggle("", isOn: $settings.notificationsEnabled)
+                                    .labelsHidden()
+                                    .tint(.cyan)
+                                    .onChange(of: settings.notificationsEnabled) { _, newValue in
+                                        if newValue {
+                                            Task {
+                                                await notificationManager.requestPermission()
+                                            }
+                                        }
+                                    }
+                            }
+                            .padding(isIPad ? 16 : 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: isIPad ? 12 : 10)
+                                    .fill(.white.opacity(0.05))
+                            )
+                            
+                            // Frequency picker (only show when enabled)
+                            if settings.notificationsEnabled {
+                                VStack(alignment: .leading, spacing: isIPad ? 10 : 8) {
+                                    Text("Notification Frequency")
+                                        .font(.system(size: isIPad ? 14 : 12, weight: .medium, design: .rounded))
+                                        .foregroundStyle(.white.opacity(0.7))
+                                    
+                                    Picker("Frequency", selection: selectedFrequency) {
+                                        ForEach(NotificationFrequency.allCases) { frequency in
+                                            Text(frequency.displayName)
+                                                .tag(frequency)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .colorMultiply(.cyan)
+                                }
+                                .padding(isIPad ? 16 : 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: isIPad ? 12 : 10)
+                                        .fill(.white.opacity(0.05))
+                                )
+                                
+                                // Test notification button
+                                Button(action: {
+                                    notificationManager.sendTestNotification()
+                                    showingTestNotificationSent = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                        showingTestNotificationSent = false
+                                    }
+                                }) {
+                                    HStack {
+                                        Image(systemName: "bell.badge")
+                                            .font(.system(size: isIPad ? 16 : 14))
+                                        Text(showingTestNotificationSent ? "Notification Sent!" : "Send Test Notification")
+                                            .font(.system(size: isIPad ? 15 : 13, weight: .medium, design: .rounded))
+                                    }
+                                    .foregroundStyle(showingTestNotificationSent ? .green : .white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, isIPad ? 14 : 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: isIPad ? 12 : 10)
+                                            .fill(showingTestNotificationSent ? Color.green.opacity(0.2) : Color.white.opacity(0.1))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: isIPad ? 12 : 10)
+                                                    .stroke(showingTestNotificationSent ? Color.green.opacity(0.5) : Color.white.opacity(0.2), lineWidth: 1)
+                                            )
+                                    )
+                                }
+                                .disabled(!notificationManager.isAuthorized)
+                                .opacity(notificationManager.isAuthorized ? 1.0 : 0.5)
+                                
+                                if !notificationManager.isAuthorized {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.system(size: isIPad ? 12 : 10))
+                                        Text("Enable notifications in System Settings")
+                                            .font(.system(size: isIPad ? 12 : 10, weight: .medium, design: .rounded))
+                                    }
+                                    .foregroundStyle(.orange)
+                                }
+                            }
+                        }
+
                         Spacer()
-                            .frame(height: isIPad ? 40 : 20)
+                            .frame(height: isIPad ? 20 : 10)
 
                         // Widget instructions
                         VStack(spacing: isIPad ? 16 : 12) {
@@ -1043,6 +1356,9 @@ struct SettingsSheet: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            notificationManager.checkAuthorizationStatus()
+        }
     }
 
     private func updateOwner() {

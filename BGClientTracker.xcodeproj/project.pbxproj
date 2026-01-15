@@ -51,11 +51,21 @@
 			);
 			target = D46770642EE20ECA003C9D30 /* BGClientTrackerExtensionExtension */;
 		};
+		D4839E462F1949170051F165 /* Exceptions for "BGClientTracker" folder in "BGClientTracker" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D46770522EE20C95003C9D30 /* BGClientTracker */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D46770552EE20C95003C9D30 /* BGClientTracker */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D4839E462F1949170051F165 /* Exceptions for "BGClientTracker" folder in "BGClientTracker" target */,
+			);
 			path = BGClientTracker;
 			sourceTree = "<group>";
 		};
@@ -381,6 +391,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = BGClientTracker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "BG Client";
 				INFOPLIST_KEY_CFBundleName = "BG Client";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
@@ -429,6 +440,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = BGClientTracker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "BG Client";
 				INFOPLIST_KEY_CFBundleName = "BG Client";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
