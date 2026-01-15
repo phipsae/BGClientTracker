@@ -181,6 +181,18 @@ class NotificationManager: ObservableObject {
     func clearBadge() {
         UNUserNotificationCenter.current().setBadgeCount(0)
     }
+    
+    /// Resets all node tracking data - should be called when owner address changes
+    func resetTracking() {
+        knownNodeIds = []
+        previousOfflineNodeIds = []
+        
+        // Clear all lastNotificationTime entries
+        let allKeys = defaults.dictionaryRepresentation().keys
+        for key in allKeys where key.hasPrefix("lastNotificationTime_") {
+            defaults.removeObject(forKey: key)
+        }
+    }
 }
 
 // MARK: - API Response Models
@@ -258,6 +270,8 @@ class SettingsManager: ObservableObject {
         didSet {
             defaults.set(ownerAddress, forKey: "ownerAddress")
             WidgetCenter.shared.reloadAllTimelines()
+            // Reset notification tracking when owner changes to avoid false offline alerts
+            NotificationManager.shared.resetTracking()
         }
     }
 
@@ -714,6 +728,10 @@ struct NodeDashboardView: View {
                 notificationManager.clearBadge()
                 notificationManager.checkAuthorizationStatus()
             }
+        }
+        .onChange(of: settings.ownerAddress) { _, _ in
+            // Automatically refresh nodes when owner address changes
+            fetchNodes()
         }
     }
 
