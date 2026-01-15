@@ -587,7 +587,9 @@ struct SetupView: View {
                             TextField("ENS name or ETH address", text: $inputAddress)
                                 .font(.system(size: isIPad ? 18 : 15, weight: .medium, design: .monospaced))
                                 .foregroundStyle(.white)
+                                #if os(iOS)
                                 .autocapitalization(.none)
+                                #endif
                                 .disableAutocorrection(true)
                         }
                         .padding(isIPad ? 18 : 14)
@@ -1524,7 +1526,9 @@ struct SettingsSheet: View {
                                                 .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
                                         )
                                 )
+                                #if os(iOS)
                                 .autocapitalization(.none)
+                                #endif
                                 .disableAutocorrection(true)
 
                             if let error = errorMessage {
