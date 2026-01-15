@@ -587,6 +587,9 @@ struct SetupView: View {
                             TextField("ENS name or ETH address", text: $inputAddress)
                                 .font(.system(size: isIPad ? 18 : 15, weight: .medium, design: .monospaced))
                                 .foregroundStyle(.white)
+                                #if os(macOS)
+                                .textFieldStyle(.plain)
+                                #endif
                                 #if os(iOS)
                                 .autocapitalization(.none)
                                 #endif
@@ -876,8 +879,11 @@ struct NodeDashboardView: View {
                     }
                 }
             }
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { fetchNodes() }) {
                         Image(systemName: "arrow.clockwise")
@@ -885,6 +891,15 @@ struct NodeDashboardView: View {
                             .foregroundStyle(.cyan)
                     }
                 }
+                #else
+                ToolbarItem(placement: .navigation) {
+                    Button(action: { fetchNodes() }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.cyan)
+                    }
+                }
+                #endif
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 8) {
                         Image("BGLogo")
@@ -896,6 +911,7 @@ struct NodeDashboardView: View {
                             .foregroundStyle(.white)
                     }
                 }
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showingSettings = true }) {
                         Image(systemName: "gearshape")
@@ -903,6 +919,15 @@ struct NodeDashboardView: View {
                             .foregroundStyle(.cyan)
                     }
                 }
+                #else
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: { showingSettings = true }) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.cyan)
+                    }
+                }
+                #endif
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsSheet(isIPad: isIPad)
@@ -1517,6 +1542,9 @@ struct SettingsSheet: View {
                             TextField("New ENS or ETH address", text: $newAddress)
                                 .font(.system(size: isIPad ? 18 : 14, weight: .medium, design: .monospaced))
                                 .foregroundStyle(.white)
+                                #if os(macOS)
+                                .textFieldStyle(.plain)
+                                #endif
                                 .padding(isIPad ? 16 : 12)
                                 .background(
                                     RoundedRectangle(cornerRadius: isIPad ? 12 : 10)
@@ -1688,8 +1716,11 @@ struct SettingsSheet: View {
                 }
             }
             .navigationTitle("Settings")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
                         dismiss()
@@ -1697,6 +1728,15 @@ struct SettingsSheet: View {
                     .font(.system(size: isIPad ? 17 : 16))
                     .foregroundStyle(.cyan)
                 }
+                #else
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .font(.system(size: 16))
+                    .foregroundStyle(.cyan)
+                }
+                #endif
             }
         }
         .preferredColorScheme(.dark)
