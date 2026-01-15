@@ -31,7 +31,7 @@ struct BGNode: Codable, Identifiable {
     let nodeId: String
     let executionClient: String
     let consensusClient: String
-    let blockNumber: Int
+    let blockNumber: Int?
     let isFollowingHead: Bool
     let nExecutionPeers: String
     let nConsensusPeers: String
@@ -171,7 +171,12 @@ struct BGClientProvider: TimelineProvider {
 
             let formatter = NumberFormatter()
             formatter.numberStyle = .decimal
-            let blockFormatted = formatter.string(from: NSNumber(value: node.blockNumber)) ?? "\(node.blockNumber)"
+            let blockFormatted: String
+            if let blockNum = node.blockNumber {
+                blockFormatted = formatter.string(from: NSNumber(value: blockNum)) ?? "\(blockNum)"
+            } else {
+                blockFormatted = "---"
+            }
 
             return BGClientEntry(
                 date: currentDate,

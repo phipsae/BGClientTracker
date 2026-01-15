@@ -20,7 +20,7 @@ struct BGNode: Codable, Identifiable {
     let nodeId: String
     let executionClient: String
     let consensusClient: String
-    let blockNumber: Int
+    let blockNumber: Int?
     let isFollowingHead: Bool
     let nExecutionPeers: String
     let nConsensusPeers: String
@@ -794,7 +794,7 @@ struct NodeCardView: View {
                 Image(systemName: "cube.fill")
                     .font(.system(size: isIPad ? 13 : 11))
                     .foregroundStyle(.cyan.opacity(0.8))
-                Text("Block #\(formatNumber(node.blockNumber))")
+                Text("Block #\(node.blockNumber.map { formatNumber($0) } ?? "---")")
                     .font(.system(size: isIPad ? 15 : 13, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.8))
             }
