@@ -22,13 +22,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return true
     }
     
-    // Legacy background fetch - triggered by "Simulate Background Fetch" in Xcode
+    // Legacy background fetch
     func application(_ application: UIApplication, performFetchWithCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
-        print("=== Legacy background fetch triggered ===")
-        
         Task {
             await BGClientTrackerApp.performBackgroundNodeCheck()
-            print("=== Legacy background fetch completed ===")
             completionHandler(.newData)
         }
     }
@@ -74,15 +71,8 @@ struct BGClientTrackerApp: App {
     
     private func scheduleBackgroundRefresh() {
         let request = BGAppRefreshTaskRequest(identifier: Self.backgroundTaskIdentifier)
-        // Schedule for 15 minutes from now (minimum iOS allows)
         request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
-        
-        do {
-            try BGTaskScheduler.shared.submit(request)
-            print("Background refresh scheduled")
-        } catch {
-            print("Could not schedule background refresh: \(error)")
-        }
+        try? BGTaskScheduler.shared.submit(request)
     }
     
     static func handleBackgroundRefresh(task: BGAppRefreshTask) {
@@ -125,7 +115,7 @@ struct BGClientTrackerApp: App {
                 )
             }
         } catch {
-            print("Background fetch failed: \(error)")
+            // Silently fail - will retry on next background fetch
         }
     }
 }
