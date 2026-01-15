@@ -51,7 +51,17 @@ class NotificationManager: ObservableObject {
         }
     }
     
-    // Track which node IDs were offline in the last check
+    // Track which node IDs were not synced in the last check (online but not following head)
+    private var previousNotSyncedNodeIds: Set<String> {
+        get {
+            Set(defaults.stringArray(forKey: "previousNotSyncedNodeIds") ?? [])
+        }
+        set {
+            defaults.set(Array(newValue), forKey: "previousNotSyncedNodeIds")
+        }
+    }
+    
+    // Track which node IDs were completely offline in the last check (disappeared from API)
     private var previousOfflineNodeIds: Set<String> {
         get {
             Set(defaults.stringArray(forKey: "previousOfflineNodeIds") ?? [])
@@ -100,24 +110,45 @@ class NotificationManager: ObservableObject {
         
         let currentNodeIds = Set(nodes.map { $0.nodeId })
         
-        // Get nodes that are offline (either not following head, or completely disappeared)
-        let notFollowingHeadIds = Set(nodes.filter { !$0.isFollowingHead }.map { $0.nodeId })
-        let disappearedNodeIds = knownNodeIds.subtracting(currentNodeIds)
-        let currentOfflineIds = notFollowingHeadIds.union(disappearedNodeIds)
+        // Separate: nodes that are not synced (online but not following head)
+        let currentNotSyncedIds = Set(nodes.filter { !$0.isFollowingHead }.map { $0.nodeId })
         
-        // Find newly offline nodes (including disappeared ones)
+        // Separate: nodes that completely disappeared from API
+        let currentOfflineIds = knownNodeIds.subtracting(currentNodeIds)
+        
+        // Find newly not synced nodes (was synced before, now not synced)
+        let newlyNotSyncedIds = currentNotSyncedIds.subtracting(previousNotSyncedNodeIds).subtracting(previousOfflineNodeIds)
+        
+        // Find newly offline nodes (was online before, now completely gone)
         let newlyOfflineIds = currentOfflineIds.subtracting(previousOfflineNodeIds)
         
-        // Send notification for each newly offline node
+        // Send notifications for newly not synced nodes
+        for nodeId in newlyNotSyncedIds {
+            sendNodeNotSyncedNotification(nodeName: nodeId)
+            setLastNotificationTime(Date(), for: nodeId)
+        }
+        
+        // Send notifications for newly offline nodes (more severe)
         for nodeId in newlyOfflineIds {
             sendNodeOfflineNotification(nodeName: nodeId)
             setLastNotificationTime(Date(), for: nodeId)
         }
         
-        // Check for cooldown reminders on nodes still offline
+        // Check for cooldown reminders
         let frequency = NotificationFrequency(rawValue: settings.notificationFrequency) ?? .everyHour
-        let stillOfflineIds = currentOfflineIds.intersection(previousOfflineNodeIds)
         
+        // Reminders for nodes still not synced
+        let stillNotSyncedIds = currentNotSyncedIds.intersection(previousNotSyncedNodeIds)
+        for nodeId in stillNotSyncedIds {
+            if let lastTime = lastNotificationTime(for: nodeId),
+               Date().timeIntervalSince(lastTime) >= frequency.timeInterval {
+                sendNodeStillNotSyncedNotification(nodeName: nodeId)
+                setLastNotificationTime(Date(), for: nodeId)
+            }
+        }
+        
+        // Reminders for nodes still offline
+        let stillOfflineIds = currentOfflineIds.intersection(previousOfflineNodeIds)
         for nodeId in stillOfflineIds {
             if let lastTime = lastNotificationTime(for: nodeId),
                Date().timeIntervalSince(lastTime) >= frequency.timeInterval {
@@ -128,13 +159,50 @@ class NotificationManager: ObservableObject {
         
         // Update tracking - add current nodes to known nodes
         knownNodeIds = knownNodeIds.union(currentNodeIds)
+        previousNotSyncedNodeIds = currentNotSyncedIds
         previousOfflineNodeIds = currentOfflineIds
     }
+    
+    // MARK: - Not Synced Notifications (node online but not following head)
+    
+    private func sendNodeNotSyncedNotification(nodeName: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Node Out of Sync"
+        content.body = "\(nodeName) is not following the chain head"
+        content.sound = .default
+        content.badge = 1
+        
+        let request = UNNotificationRequest(
+            identifier: "node-not-synced-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        
+        UNUserNotificationCenter.current().add(request)
+    }
+    
+    private func sendNodeStillNotSyncedNotification(nodeName: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Node Still Out of Sync"
+        content.body = "\(nodeName) is still not following the chain head"
+        content.sound = .default
+        content.badge = 1
+        
+        let request = UNNotificationRequest(
+            identifier: "node-still-not-synced-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        
+        UNUserNotificationCenter.current().add(request)
+    }
+    
+    // MARK: - Offline Notifications (node completely disappeared)
     
     private func sendNodeOfflineNotification(nodeName: String) {
         let content = UNMutableNotificationContent()
         content.title = "Node Offline"
-        content.body = "\(nodeName) is down!"
+        content.body = "\(nodeName) is completely down! Restart required."
         content.sound = .default
         content.badge = 1
         
@@ -150,7 +218,7 @@ class NotificationManager: ObservableObject {
     private func sendNodeStillOfflineNotification(nodeName: String) {
         let content = UNMutableNotificationContent()
         content.title = "Node Still Offline"
-        content.body = "\(nodeName) is still down!"
+        content.body = "\(nodeName) is still down! Please restart."
         content.sound = .default
         content.badge = 1
         
@@ -185,6 +253,7 @@ class NotificationManager: ObservableObject {
     /// Resets all node tracking data - should be called when owner address changes
     func resetTracking() {
         knownNodeIds = []
+        previousNotSyncedNodeIds = []
         previousOfflineNodeIds = []
         
         // Clear all lastNotificationTime entries
@@ -192,6 +261,14 @@ class NotificationManager: ObservableObject {
         for key in allKeys where key.hasPrefix("lastNotificationTime_") {
             defaults.removeObject(forKey: key)
         }
+    }
+    
+    /// Remove a specific node from tracking - should be called when user deletes an offline node
+    func removeNodeFromTracking(_ nodeId: String) {
+        knownNodeIds.remove(nodeId)
+        previousNotSyncedNodeIds.remove(nodeId)
+        previousOfflineNodeIds.remove(nodeId)
+        defaults.removeObject(forKey: "lastNotificationTime_\(nodeId)")
     }
 }
 
@@ -225,6 +302,32 @@ struct BGBRDBalanceResponse: Codable {
 struct PendingBreadResponse: Codable {
     let owner: String
     let bread: String
+}
+
+// MARK: - Stored Node Model (for offline tracking)
+
+struct StoredNode: Codable, Identifiable {
+    let nodeId: String
+    let executionClient: String
+    let consensusClient: String
+    let lastSeen: Date
+    
+    var id: String { nodeId }
+    
+    /// Create a StoredNode from a BGNode (when node is online)
+    init(from node: BGNode) {
+        self.nodeId = node.nodeId
+        self.executionClient = node.executionClient
+        self.consensusClient = node.consensusClient
+        self.lastSeen = Date()
+    }
+    
+    init(nodeId: String, executionClient: String, consensusClient: String, lastSeen: Date) {
+        self.nodeId = nodeId
+        self.executionClient = executionClient
+        self.consensusClient = consensusClient
+        self.lastSeen = lastSeen
+    }
 }
 
 // MARK: - API Service
@@ -272,6 +375,8 @@ class SettingsManager: ObservableObject {
             WidgetCenter.shared.reloadAllTimelines()
             // Reset notification tracking when owner changes to avoid false offline alerts
             NotificationManager.shared.resetTracking()
+            // Clear stored nodes when owner changes
+            clearStoredNodes()
         }
     }
 
@@ -307,6 +412,60 @@ class SettingsManager: ObservableObject {
         self.notificationsEnabled = defaults.bool(forKey: "notificationsEnabled")
         // Default to every hour
         self.notificationFrequency = defaults.object(forKey: "notificationFrequency") as? Int ?? NotificationFrequency.everyHour.rawValue
+    }
+    
+    // MARK: - Node Persistence for Offline Tracking
+    
+    /// Dictionary of stored nodes keyed by nodeId
+    private var storedNodesData: [String: StoredNode] {
+        get {
+            guard let data = defaults.data(forKey: "storedNodes"),
+                  let nodes = try? JSONDecoder().decode([String: StoredNode].self, from: data) else {
+                return [:]
+            }
+            return nodes
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: "storedNodes")
+            }
+        }
+    }
+    
+    /// Save or update a node when it's seen online
+    func saveNode(_ node: BGNode) {
+        var nodes = storedNodesData
+        nodes[node.nodeId] = StoredNode(from: node)
+        storedNodesData = nodes
+    }
+    
+    /// Save multiple nodes at once
+    func saveNodes(_ bgNodes: [BGNode]) {
+        var nodes = storedNodesData
+        for node in bgNodes {
+            nodes[node.nodeId] = StoredNode(from: node)
+        }
+        storedNodesData = nodes
+    }
+    
+    /// Remove a node permanently (when user deletes an offline node)
+    func removeNode(_ nodeId: String) {
+        var nodes = storedNodesData
+        nodes.removeValue(forKey: nodeId)
+        storedNodesData = nodes
+    }
+    
+    /// Get all nodes that are currently offline (stored but not in the online list)
+    func getOfflineNodes(excluding onlineNodeIds: Set<String>) -> [StoredNode] {
+        let stored = storedNodesData
+        return stored.values
+            .filter { !onlineNodeIds.contains($0.nodeId) }
+            .sorted { $0.lastSeen > $1.lastSeen } // Most recently seen first
+    }
+    
+    /// Clear all stored nodes - should be called when owner address changes
+    func clearStoredNodes() {
+        storedNodesData = [:]
     }
 }
 
@@ -571,6 +730,7 @@ struct NodeDashboardView: View {
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @Environment(\.scenePhase) var scenePhase
     @State private var nodes: [BGNode] = []
+    @State private var offlineNodes: [StoredNode] = []
     @State private var isLoading: Bool = true
     @State private var errorMessage: String?
     @State private var lastUpdated: Date = Date()
@@ -670,6 +830,37 @@ struct NodeDashboardView: View {
                                                 settings.selectedNodeId = node.nodeId
                                             }
                                         }
+                                }
+                            }
+                            
+                            // Offline Nodes Section
+                            if !offlineNodes.isEmpty {
+                                VStack(alignment: .leading, spacing: isIPad ? 16 : 12) {
+                                    // Section header
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.system(size: isIPad ? 16 : 14))
+                                            .foregroundStyle(.red)
+                                        Text("Offline Nodes")
+                                            .font(.system(size: isIPad ? 18 : 15, weight: .semibold, design: .rounded))
+                                            .foregroundStyle(.white.opacity(0.8))
+                                        
+                                        Text("(\(offlineNodes.count))")
+                                            .font(.system(size: isIPad ? 16 : 13, weight: .medium, design: .monospaced))
+                                            .foregroundStyle(.red.opacity(0.8))
+                                    }
+                                    .padding(.top, isIPad ? 16 : 12)
+                                    
+                                    // Offline node cards
+                                    LazyVGrid(columns: gridColumns, spacing: isIPad ? 20 : 16) {
+                                        ForEach(offlineNodes) { node in
+                                            OfflineNodeCardView(
+                                                node: node,
+                                                onDelete: { deleteOfflineNode(node.nodeId) },
+                                                isIPad: isIPad
+                                            )
+                                        }
+                                    }
                                 }
                             }
 
@@ -813,9 +1004,9 @@ struct NodeDashboardView: View {
                 Text("Nodes Online")
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.5))
-                Text("\(nodes.filter { $0.isFollowingHead }.count)/\(nodes.count)")
+                Text("\(nodes.filter { $0.isFollowingHead }.count)/\(nodes.count + offlineNodes.count)")
                     .font(.system(size: 32, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(offlineNodes.isEmpty ? .green : .red)
             }
             .frame(minWidth: 150)
             .padding(20)
@@ -824,7 +1015,7 @@ struct NodeDashboardView: View {
                     .fill(.ultraThinMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.green.opacity(0.2), lineWidth: 1)
+                            .stroke(offlineNodes.isEmpty ? Color.green.opacity(0.2) : Color.red.opacity(0.2), lineWidth: 1)
                     )
             )
         }
@@ -887,9 +1078,9 @@ struct NodeDashboardView: View {
                 Text("Nodes Online")
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.5))
-                Text("\(nodes.filter { $0.isFollowingHead }.count)/\(nodes.count)")
+                Text("\(nodes.filter { $0.isFollowingHead }.count)/\(nodes.count + offlineNodes.count)")
                     .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(offlineNodes.isEmpty ? .green : .red)
             }
         }
         .padding(16)
@@ -932,6 +1123,13 @@ struct NodeDashboardView: View {
                         isBakingAnimating = true
                     }
                     
+                    // Save all online nodes to persistent storage
+                    settings.saveNodes(nodeData.nodes)
+                    
+                    // Calculate offline nodes (stored but not in current API response)
+                    let onlineNodeIds = Set(nodeData.nodes.map { $0.nodeId })
+                    offlineNodes = settings.getOfflineNodes(excluding: onlineNodeIds)
+                    
                     // Check nodes and send notification if needed
                     notificationManager.checkNodesAndNotify(
                         nodes: nodeData.nodes,
@@ -945,6 +1143,21 @@ struct NodeDashboardView: View {
                         errorMessage = "Failed to fetch node data"
                     }
                 }
+            }
+        }
+    }
+    
+    private func deleteOfflineNode(_ nodeId: String) {
+        withAnimation(.spring(response: 0.3)) {
+            settings.removeNode(nodeId)
+            offlineNodes.removeAll { $0.nodeId == nodeId }
+            // Also remove from notification tracking
+            notificationManager.removeNodeFromTracking(nodeId)
+            
+            // If the deleted node was selected for the widget, select another node
+            if settings.selectedNodeId == nodeId {
+                // Try to select first online node, otherwise clear selection
+                settings.selectedNodeId = nodes.first?.nodeId ?? ""
             }
         }
     }
@@ -1078,6 +1291,116 @@ struct NodeCardView: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: num)) ?? "\(num)"
+    }
+}
+
+// MARK: - Offline Node Card View
+
+struct OfflineNodeCardView: View {
+    let node: StoredNode
+    let onDelete: () -> Void
+    var isIPad: Bool = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: isIPad ? 14 : 12) {
+            // Header row
+            HStack {
+                // Offline status indicator
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: isIPad ? 12 : 10, height: isIPad ? 12 : 10)
+                        .shadow(color: .red.opacity(0.5), radius: 4)
+                    
+                    Text("Offline")
+                        .font(.system(size: isIPad ? 14 : 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.red)
+                }
+                .padding(.horizontal, isIPad ? 12 : 10)
+                .padding(.vertical, isIPad ? 6 : 5)
+                .background(
+                    Capsule()
+                        .fill(.red.opacity(0.15))
+                )
+                
+                Spacer()
+                
+                // Delete button
+                Button(action: onDelete) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "trash")
+                            .font(.system(size: isIPad ? 13 : 11))
+                        Text("Remove")
+                            .font(.system(size: isIPad ? 12 : 10, weight: .medium, design: .rounded))
+                    }
+                    .foregroundStyle(.red.opacity(0.8))
+                    .padding(.horizontal, isIPad ? 10 : 8)
+                    .padding(.vertical, isIPad ? 6 : 5)
+                    .background(
+                        Capsule()
+                            .fill(.red.opacity(0.1))
+                            .overlay(
+                                Capsule()
+                                    .stroke(.red.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            
+            // Node ID
+            Text(node.nodeId)
+                .font(.system(size: isIPad ? 18 : 16, weight: .bold, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            
+            Divider()
+                .background(.white.opacity(0.1))
+            
+            // Clients info (grayed out)
+            HStack(spacing: isIPad ? 24 : 16) {
+                VStack(alignment: .leading, spacing: isIPad ? 4 : 2) {
+                    Text("Execution")
+                        .font(.system(size: isIPad ? 12 : 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.4))
+                    Text(node.executionClient)
+                        .font(.system(size: isIPad ? 13 : 11, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .lineLimit(1)
+                }
+                
+                VStack(alignment: .leading, spacing: isIPad ? 4 : 2) {
+                    Text("Consensus")
+                        .font(.system(size: isIPad ? 12 : 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.4))
+                    Text(node.consensusClient)
+                        .font(.system(size: isIPad ? 13 : 11, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .lineLimit(1)
+                }
+            }
+            
+            // Last seen timestamp
+            HStack(spacing: 6) {
+                Image(systemName: "clock")
+                    .font(.system(size: isIPad ? 11 : 9))
+                    .foregroundStyle(.white.opacity(0.4))
+                Text("Last seen: \(node.lastSeen, style: .relative) ago")
+                    .font(.system(size: isIPad ? 12 : 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+        }
+        .padding(isIPad ? 20 : 16)
+        .background(
+            RoundedRectangle(cornerRadius: isIPad ? 20 : 16)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: isIPad ? 20 : 16)
+                        .stroke(Color.red.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .opacity(0.8) // Slightly dimmed to indicate offline state
     }
 }
 

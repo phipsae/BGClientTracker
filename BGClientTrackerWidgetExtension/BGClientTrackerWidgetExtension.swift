@@ -67,6 +67,16 @@ struct WidgetSettings {
     static var selectedNodeId: String {
         defaults.string(forKey: "selectedNodeId") ?? ""
     }
+    
+    // Store the last shown node ID so widget can show it even if app clears selection
+    static var lastShownNodeId: String {
+        get {
+            defaults.string(forKey: "widgetLastShownNodeId") ?? ""
+        }
+        set {
+            defaults.set(newValue, forKey: "widgetLastShownNodeId")
+        }
+    }
 }
 
 // MARK: - Timeline Entry
@@ -76,6 +86,7 @@ struct BGClientEntry: TimelineEntry {
     let nodeId: String
     let blockNumber: String
     let isFollowingHead: Bool
+    let isOffline: Bool  // Node completely disappeared from API
     let executionPeers: String
     let consensusPeers: String
     let cpuUsage: String
@@ -94,6 +105,7 @@ struct BGClientProvider: TimelineProvider {
             nodeId: "my-node",
             blockNumber: "24,000,000",
             isFollowingHead: true,
+            isOffline: false,
             executionPeers: "95",
             consensusPeers: "149",
             cpuUsage: "15.0",
@@ -129,6 +141,9 @@ struct BGClientProvider: TimelineProvider {
         let currentDate = Date()
         let ownerAddress = WidgetSettings.ownerAddress
         let selectedNodeId = WidgetSettings.selectedNodeId
+        
+        // Use selected node ID, or fall back to last shown node ID
+        let nodeIdToShow = !selectedNodeId.isEmpty ? selectedNodeId : WidgetSettings.lastShownNodeId
 
         // Check if setup is needed
         guard !ownerAddress.isEmpty else {
@@ -137,6 +152,7 @@ struct BGClientProvider: TimelineProvider {
                 nodeId: "",
                 blockNumber: "",
                 isFollowingHead: false,
+                isOffline: false,
                 executionPeers: "",
                 consensusPeers: "",
                 cpuUsage: "",
@@ -150,15 +166,59 @@ struct BGClientProvider: TimelineProvider {
         do {
             let response = try await BGClientAPIService.fetchNodes(owner: ownerAddress)
 
-            // Find the selected node, or use the first one
-            let node = response.nodes.first { $0.nodeId == selectedNodeId } ?? response.nodes.first
+            // Check if the node we want to show is in the response
+            let targetNode = response.nodes.first { $0.nodeId == nodeIdToShow }
+            
+            // If target node is not found but we have a node ID, the node is offline
+            if targetNode == nil && !nodeIdToShow.isEmpty {
+                // Node is offline - show offline state with the stored node ID
+                return BGClientEntry(
+                    date: currentDate,
+                    nodeId: nodeIdToShow,
+                    blockNumber: "—",
+                    isFollowingHead: false,
+                    isOffline: true,
+                    executionPeers: "—",
+                    consensusPeers: "—",
+                    cpuUsage: "—",
+                    memoryUsage: "—",
+                    storageUsage: "—",
+                    hasError: false,
+                    needsSetup: false
+                )
+            }
+            
+            // If no target node and API returns empty (all nodes offline)
+            if response.nodes.isEmpty {
+                // Use last shown node ID if available
+                let offlineNodeId = !WidgetSettings.lastShownNodeId.isEmpty ? WidgetSettings.lastShownNodeId : "Unknown node"
+                return BGClientEntry(
+                    date: currentDate,
+                    nodeId: offlineNodeId,
+                    blockNumber: "—",
+                    isFollowingHead: false,
+                    isOffline: true,
+                    executionPeers: "—",
+                    consensusPeers: "—",
+                    cpuUsage: "—",
+                    memoryUsage: "—",
+                    storageUsage: "—",
+                    hasError: false,
+                    needsSetup: false
+                )
+            }
+            
+            // Use target node or fall back to first available node
+            let node = targetNode ?? response.nodes.first
 
             guard let node = node else {
+                // No nodes at all (shouldn't reach here due to check above)
                 return BGClientEntry(
                     date: currentDate,
                     nodeId: "",
                     blockNumber: "",
                     isFollowingHead: false,
+                    isOffline: true,
                     executionPeers: "",
                     consensusPeers: "",
                     cpuUsage: "",
@@ -168,6 +228,9 @@ struct BGClientProvider: TimelineProvider {
                     needsSetup: false
                 )
             }
+            
+            // Save the node ID we're showing so we can use it if node goes offline
+            WidgetSettings.lastShownNodeId = node.nodeId
 
             let formatter = NumberFormatter()
             formatter.numberStyle = .decimal
@@ -183,6 +246,7 @@ struct BGClientProvider: TimelineProvider {
                 nodeId: node.nodeId,
                 blockNumber: blockFormatted,
                 isFollowingHead: node.isFollowingHead,
+                isOffline: false,
                 executionPeers: node.nExecutionPeers,
                 consensusPeers: node.nConsensusPeers,
                 cpuUsage: node.cpuUsage,
@@ -198,6 +262,7 @@ struct BGClientProvider: TimelineProvider {
                 nodeId: selectedNodeId,
                 blockNumber: "—",
                 isFollowingHead: false,
+                isOffline: false,
                 executionPeers: "—",
                 consensusPeers: "—",
                 cpuUsage: "—",
@@ -261,6 +326,28 @@ struct BGClientWidgetEntryView: View {
         .padding()
     }
 
+    // Status color based on node state
+    var statusColor: Color {
+        if entry.isOffline {
+            return .red
+        } else if entry.isFollowingHead {
+            return .green
+        } else {
+            return .orange
+        }
+    }
+    
+    // Status text based on node state
+    var statusText: String {
+        if entry.isOffline {
+            return "Offline"
+        } else if entry.isFollowingHead {
+            return "Synced"
+        } else {
+            return "Syncing"
+        }
+    }
+    
     // MARK: - Small Widget
     var smallWidget: some View {
         ZStack {
@@ -285,35 +372,41 @@ struct BGClientWidgetEntryView: View {
                 // Status indicator
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(entry.isFollowingHead ? Color.green : Color.orange)
+                        .fill(statusColor)
                         .frame(width: 8, height: 8)
-                        .shadow(color: entry.isFollowingHead ? .green : .orange, radius: 3)
+                        .shadow(color: statusColor, radius: 3)
 
-                    Text(entry.isFollowingHead ? "Synced" : "Syncing")
+                    Text(statusText)
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundStyle(entry.isFollowingHead ? .green : .orange)
+                        .foregroundStyle(statusColor)
                 }
 
                 // Node ID
                 Text(shortenNodeId(entry.nodeId))
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(entry.isOffline ? .white.opacity(0.6) : .white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
 
                 Spacer()
                     .frame(height: 4)
 
-                // Block number
-                HStack(spacing: 4) {
-                    Image(systemName: "cube.fill")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.cyan.opacity(0.8))
-                    Text(entry.blockNumber)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                // Block number (or offline message)
+                if entry.isOffline {
+                    Text("Node is down")
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(.red.opacity(0.8))
+                } else {
+                    HStack(spacing: 4) {
+                        Image(systemName: "cube.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.cyan.opacity(0.8))
+                        Text(entry.blockNumber)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
                 }
 
                 Spacer()
@@ -366,50 +459,61 @@ struct BGClientWidgetEntryView: View {
                     // Status indicator
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(entry.isFollowingHead ? Color.green : Color.orange)
+                            .fill(statusColor)
                             .frame(width: 8, height: 8)
-                            .shadow(color: entry.isFollowingHead ? .green : .orange, radius: 3)
+                            .shadow(color: statusColor, radius: 3)
 
-                        Text(entry.isFollowingHead ? "Synced" : "Syncing")
+                        Text(statusText)
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(entry.isFollowingHead ? .green : .orange)
+                            .foregroundStyle(statusColor)
                     }
 
                     // Node ID
                     Text(shortenNodeId(entry.nodeId))
                         .font(.system(size: 13, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(entry.isOffline ? .white.opacity(0.6) : .white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
 
-                    // Block number
-                    HStack(spacing: 4) {
-                        Image(systemName: "cube.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.cyan.opacity(0.8))
-                        Text(entry.blockNumber)
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
-
-                    // Peers
-                    HStack(spacing: 10) {
-                        HStack(spacing: 3) {
-                            Image(systemName: "network")
+                    if entry.isOffline {
+                        // Offline message
+                        Text("Node is down")
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(.red.opacity(0.8))
+                        
+                        Text("Check your node")
+                            .font(.system(size: 9, weight: .regular, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.5))
+                    } else {
+                        // Block number
+                        HStack(spacing: 4) {
+                            Image(systemName: "cube.fill")
                                 .font(.system(size: 9))
                                 .foregroundStyle(.cyan.opacity(0.8))
-                            Text("\(entry.executionPeers)")
+                            Text(entry.blockNumber)
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.7))
+                                .foregroundStyle(.white.opacity(0.8))
                         }
 
-                        HStack(spacing: 3) {
-                            Image(systemName: "antenna.radiowaves.left.and.right")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.purple.opacity(0.8))
-                            Text("\(entry.consensusPeers)")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.7))
+                        // Peers
+                        HStack(spacing: 10) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "network")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.cyan.opacity(0.8))
+                                Text("\(entry.executionPeers)")
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
+
+                            HStack(spacing: 3) {
+                                Image(systemName: "antenna.radiowaves.left.and.right")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.purple.opacity(0.8))
+                                Text("\(entry.consensusPeers)")
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
                         }
                     }
 
@@ -426,23 +530,38 @@ struct BGClientWidgetEntryView: View {
                     .frame(width: 1)
                     .frame(maxHeight: 70)
 
-                // Right side - Resource usage
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Resources")
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.5))
+                // Right side - Resource usage or offline indicator
+                if entry.isOffline {
+                    VStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(.red.opacity(0.8))
+                        
+                        Text("Restart\nRequired")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.leading, 12)
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Resources")
+                            .font(.system(size: 9, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.5))
 
-                    // CPU
-                    ResourceBarWidget(label: "CPU", value: entry.cpuUsage, color: .cyan)
+                        // CPU
+                        ResourceBarWidget(label: "CPU", value: entry.cpuUsage, color: .cyan)
 
-                    // Memory
-                    ResourceBarWidget(label: "MEM", value: entry.memoryUsage, color: .purple)
+                        // Memory
+                        ResourceBarWidget(label: "MEM", value: entry.memoryUsage, color: .purple)
 
-                    // Storage
-                    ResourceBarWidget(label: "DISK", value: entry.storageUsage, color: .orange)
+                        // Storage
+                        ResourceBarWidget(label: "DISK", value: entry.storageUsage, color: .orange)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 12)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 12)
             }
 
             // Refresh button - bottom right
@@ -536,6 +655,7 @@ struct BGClientTrackerWidget_Previews: PreviewProvider {
                     nodeId: "blubbo-NUC10i7FNH",
                     blockNumber: "24,003,850",
                     isFollowingHead: true,
+                    isOffline: false,
                     executionPeers: "95",
                     consensusPeers: "149",
                     cpuUsage: "16.9",
@@ -554,6 +674,7 @@ struct BGClientTrackerWidget_Previews: PreviewProvider {
                     nodeId: "blubbo-NUC10i7FNH",
                     blockNumber: "24,003,850",
                     isFollowingHead: false,
+                    isOffline: false,
                     executionPeers: "95",
                     consensusPeers: "149",
                     cpuUsage: "16.9",
@@ -565,6 +686,25 @@ struct BGClientTrackerWidget_Previews: PreviewProvider {
             )
             .previewContext(WidgetPreviewContext(family: .systemSmall))
             .previewDisplayName("Small - Syncing")
+            
+            BGClientWidgetEntryView(
+                entry: BGClientEntry(
+                    date: Date(),
+                    nodeId: "blubbo-NUC10i7FNH",
+                    blockNumber: "—",
+                    isFollowingHead: false,
+                    isOffline: true,
+                    executionPeers: "—",
+                    consensusPeers: "—",
+                    cpuUsage: "—",
+                    memoryUsage: "—",
+                    storageUsage: "—",
+                    hasError: false,
+                    needsSetup: false
+                )
+            )
+            .previewContext(WidgetPreviewContext(family: .systemSmall))
+            .previewDisplayName("Small - Offline")
 
             BGClientWidgetEntryView(
                 entry: BGClientEntry(
@@ -572,6 +712,7 @@ struct BGClientTrackerWidget_Previews: PreviewProvider {
                     nodeId: "blubbo-NUC10i7FNH",
                     blockNumber: "24,003,850",
                     isFollowingHead: true,
+                    isOffline: false,
                     executionPeers: "95",
                     consensusPeers: "149",
                     cpuUsage: "16.9",
@@ -582,7 +723,26 @@ struct BGClientTrackerWidget_Previews: PreviewProvider {
                 )
             )
             .previewContext(WidgetPreviewContext(family: .systemMedium))
-            .previewDisplayName("Medium")
+            .previewDisplayName("Medium - Synced")
+            
+            BGClientWidgetEntryView(
+                entry: BGClientEntry(
+                    date: Date(),
+                    nodeId: "blubbo-NUC10i7FNH",
+                    blockNumber: "—",
+                    isFollowingHead: false,
+                    isOffline: true,
+                    executionPeers: "—",
+                    consensusPeers: "—",
+                    cpuUsage: "—",
+                    memoryUsage: "—",
+                    storageUsage: "—",
+                    hasError: false,
+                    needsSetup: false
+                )
+            )
+            .previewContext(WidgetPreviewContext(family: .systemMedium))
+            .previewDisplayName("Medium - Offline")
 
             BGClientWidgetEntryView(
                 entry: BGClientEntry(
@@ -590,6 +750,7 @@ struct BGClientTrackerWidget_Previews: PreviewProvider {
                     nodeId: "",
                     blockNumber: "",
                     isFollowingHead: false,
+                    isOffline: false,
                     executionPeers: "",
                     consensusPeers: "",
                     cpuUsage: "",
