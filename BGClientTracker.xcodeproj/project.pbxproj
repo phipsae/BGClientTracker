@@ -51,11 +51,21 @@
 			);
 			target = D46770642EE20ECA003C9D30 /* BGClientTrackerExtensionExtension */;
 		};
+		D46770802EE20ECD003C9D30 /* Exceptions for "BGClientTracker" folder in "BGClientTracker" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D46770522EE20C95003C9D30 /* BGClientTracker */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D46770552EE20C95003C9D30 /* BGClientTracker */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D46770802EE20ECD003C9D30 /* Exceptions for "BGClientTracker" folder in "BGClientTracker" target */,
+			);
 			path = BGClientTracker;
 			sourceTree = "<group>";
 		};

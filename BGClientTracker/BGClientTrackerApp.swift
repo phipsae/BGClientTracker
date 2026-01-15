@@ -79,11 +79,6 @@ struct BGClientTrackerApp: App {
     static let backgroundTaskIdentifier = "com.buidlguidl.BGClientTracker.refresh"
     #endif
     
-    // Timer for periodic refresh on macOS (since BGTaskScheduler isn't available)
-    #if os(macOS)
-    @State private var refreshTimer: Timer?
-    #endif
-    
     init() {
         #if os(iOS)
         // Register background task
